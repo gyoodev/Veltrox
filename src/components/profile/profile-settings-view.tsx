@@ -749,7 +749,7 @@ export function ProfileSettingsView({
                   {t("deleteButton")}
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90dvh] overflow-y-auto overscroll-contain p-4 sm:p-6">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2 text-destructive">
                     <AlertTriangle className="h-5 w-5" />
@@ -784,11 +784,12 @@ export function ProfileSettingsView({
                     ) : null}
                   </div>
 
-                  <DialogFooter>
+                  <DialogFooter className="pt-3 sticky bottom-0 bg-popover/95 backdrop-blur-md border-t border-border/40 pb-1 mt-2 z-10">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => setDeleteDialogOpen(false)}
+                      className="w-full sm:w-auto min-h-10"
                     >
                       {tCommon("cancel")}
                     </Button>
@@ -796,6 +797,7 @@ export function ProfileSettingsView({
                       type="submit"
                       variant="destructive"
                       disabled={deleteForm.formState.isSubmitting}
+                      className="w-full sm:w-auto min-h-10 font-semibold"
                     >
                       {deleteForm.formState.isSubmitting ? (
                         <>

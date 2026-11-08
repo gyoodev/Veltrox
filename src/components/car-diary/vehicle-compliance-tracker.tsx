@@ -602,8 +602,8 @@ export function VehicleComplianceTracker({
           </div>
         </CardHeader>
 
-        <CardContent>
-          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+        <CardContent className="p-3.5 sm:p-6 pt-0">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {slotCards.map((card) => {
               const Icon = card.icon;
               const isExpired = card.state === "expired";
@@ -614,7 +614,7 @@ export function VehicleComplianceTracker({
                 <div
                   key={card.type}
                   className={cn(
-                    "flex flex-col justify-between rounded-2xl border p-4 transition-all",
+                    "flex flex-col justify-between rounded-2xl border p-3.5 sm:p-4 transition-all min-w-0 overflow-hidden",
                     isExpired
                       ? "border-destructive/50 bg-destructive/[0.06]"
                       : isSoon
@@ -624,44 +624,44 @@ export function VehicleComplianceTracker({
                           : "border-dashed border-border bg-secondary/15 hover:border-primary/35"
                   )}
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
+                  <div className="min-w-0">
+                    <div className="flex items-start justify-between gap-2 min-w-0">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1 pr-1">
                         <div
                           className={cn(
-                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl mt-0.5",
                             card.iconAccentClass
                           )}
                         >
                           <Icon className="h-4 w-4" aria-hidden="true" />
                         </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-foreground">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm font-bold text-foreground truncate">
                             {t(`items.${card.type}`)}
                           </h3>
-                          <p className="text-[11px] text-muted-foreground">
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 leading-tight">
                             {t(`hints.${card.type}`)}
                           </p>
                         </div>
                       </div>
 
                       {isExpired ? (
-                        <Badge variant="destructive" className="shrink-0">
+                        <Badge variant="destructive" className="shrink-0 text-[10px] sm:text-xs">
                           <AlertTriangle className="h-3 w-3" />
                           {t("statusExpired")}
                         </Badge>
                       ) : isSoon ? (
-                        <Badge variant="warning" className="shrink-0">
+                        <Badge variant="warning" className="shrink-0 text-[10px] sm:text-xs">
                           <BellRing className="h-3 w-3" />
                           {t("statusSoon")}
                         </Badge>
                       ) : isValid ? (
-                        <Badge variant="success" className="shrink-0">
+                        <Badge variant="success" className="shrink-0 text-[10px] sm:text-xs">
                           <CheckCircle2 className="h-3 w-3" />
                           {t("statusValid")}
                         </Badge>
                       ) : (
-                        <Badge variant="secondary" className="shrink-0">
+                        <Badge variant="secondary" className="shrink-0 text-[10px] sm:text-xs">
                           {t("statusNotSet")}
                         </Badge>
                       )}
@@ -669,9 +669,9 @@ export function VehicleComplianceTracker({
 
                     {card.expiryDate && card.daysRemaining !== null ? (
                       <div className="mt-3.5 space-y-1">
-                        <div className="flex items-center justify-between text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
                           <span className="inline-flex items-center gap-1.5 font-mono font-semibold text-foreground">
-                            <Calendar className="h-3.5 w-3.5 text-primary" />
+                            <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
                             {formatDate(card.expiryDate, locale)}
                           </span>
                           <span
@@ -709,19 +709,19 @@ export function VehicleComplianceTracker({
                     )}
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
-                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <BellRing className="h-3 w-3 text-primary" />
-                      {t("alertLeadLabel")}
+                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-t border-border/60 pt-3">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+                      <BellRing className="h-3 w-3 text-primary shrink-0" />
+                      <span>{t("alertLeadLabel")}</span>
                     </span>
 
-                    <div className="flex items-center gap-1.5">
+                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 w-full sm:w-auto">
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
                         className={cn(
-                          "h-8 text-xs gap-1",
+                          "h-8 px-2 text-xs gap-1 w-full sm:w-auto justify-center font-medium",
                           card.type === "vignette" &&
                             "border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300",
                           card.type === "technical_inspection" &&
@@ -729,12 +729,14 @@ export function VehicleComplianceTracker({
                         )}
                         onClick={() => void handleOpenCheckModal(card.type)}
                       >
-                        <Search className="h-3 w-3" />
-                        {card.type === "vignette"
-                          ? t("checkVignetteBtn")
-                          : card.type === "technical_inspection"
-                            ? t("rtaCheckBtn")
-                            : t("checkBtn")}
+                        <Search className="h-3 w-3 shrink-0" />
+                        <span className="truncate">
+                          {card.type === "vignette"
+                            ? t("checkVignetteBtn")
+                            : card.type === "technical_inspection"
+                              ? t("rtaCheckBtn")
+                              : t("checkBtn")}
+                        </span>
                       </Button>
 
                       <Button
@@ -747,18 +749,20 @@ export function VehicleComplianceTracker({
                               ? "outline"
                               : "secondary"
                         }
-                        className="h-8 text-xs"
+                        className="h-8 px-2 text-xs gap-1 w-full sm:w-auto justify-center font-medium"
                         onClick={() => openSlotEditor(card)}
                       >
                         {card.expiryDate ? (
                           <>
-                            <Pencil className="h-3 w-3" />
-                            {isExpired || isSoon ? t("renewBtn") : t("editBtn")}
+                            <Pencil className="h-3 w-3 shrink-0" />
+                            <span className="truncate">
+                              {isExpired || isSoon ? t("renewBtn") : t("editBtn")}
+                            </span>
                           </>
                         ) : (
                           <>
-                            <CalendarPlus className="h-3.5 w-3.5" />
-                            {t("setExpiryBtn")}
+                            <CalendarPlus className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate">{t("setExpiryBtn")}</span>
                           </>
                         )}
                       </Button>
@@ -773,7 +777,7 @@ export function VehicleComplianceTracker({
 
       {/* Quick Set / Renew Compliance Expiry Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
@@ -785,7 +789,7 @@ export function VehicleComplianceTracker({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 pt-1">
+          <div className="space-y-4 pt-1 flex-1">
             <div className="space-y-2">
               <Label htmlFor="compliance-expiry-date">{t("expiryDateLabel")}</Label>
               <Input
@@ -859,11 +863,12 @@ export function VehicleComplianceTracker({
             </div>
           </div>
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-3 sticky bottom-0 bg-popover/95 backdrop-blur-md border-t border-border/40 pb-1 mt-2 z-10">
             <Button
               type="button"
               variant="outline"
               onClick={() => setModalOpen(false)}
+              className="w-full sm:w-auto min-h-10"
             >
               {tCommon("cancel")}
             </Button>
@@ -872,6 +877,7 @@ export function VehicleComplianceTracker({
               variant="gradient"
               disabled={saving}
               onClick={() => void handleSaveSlot()}
+              className="w-full sm:w-auto min-h-10 font-semibold"
             >
               {saving ? (
                 <>
@@ -888,7 +894,7 @@ export function VehicleComplianceTracker({
 
       {/* Automatic Registry Check & Add Modal */}
       <Dialog open={checkModalOpen} onOpenChange={setCheckModalOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto overscroll-contain p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {checkingSlot === "vignette" ? (
@@ -1625,11 +1631,12 @@ export function VehicleComplianceTracker({
             </div>
           </div>
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-3 sticky bottom-0 bg-popover/95 backdrop-blur-md border-t border-border/40 pb-1 mt-2 z-10">
             <Button
               type="button"
               variant="outline"
               onClick={() => setCheckModalOpen(false)}
+              className="w-full sm:w-auto min-h-10"
             >
               {tCommon("cancel")}
             </Button>
@@ -1638,6 +1645,7 @@ export function VehicleComplianceTracker({
               variant="gradient"
               disabled={saving || checkingLoading || !checkDueDateInput}
               onClick={() => void handleApplyCheckResult()}
+              className="w-full sm:w-auto min-h-10 font-semibold"
             >
               {saving ? (
                 <>

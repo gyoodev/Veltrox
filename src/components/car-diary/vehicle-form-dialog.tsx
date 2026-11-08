@@ -435,11 +435,12 @@ export function VehicleFormDialog({
             </div>
           </div>
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-3 sticky bottom-0 bg-popover/95 backdrop-blur-md border-t border-border/40 pb-1 mt-2 z-10">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              className="w-full sm:w-auto min-h-10"
             >
               {tCommon("cancel")}
             </Button>
@@ -447,6 +448,7 @@ export function VehicleFormDialog({
               type="submit"
               variant="gradient"
               disabled={form.formState.isSubmitting || uploadingPhoto}
+              className="w-full sm:w-auto min-h-10 font-semibold"
             >
               {form.formState.isSubmitting ? (
                 <>
