@@ -528,7 +528,7 @@ export function DashboardShell({
 
         <main
           id="main-content"
-          className="mx-auto w-full max-w-6xl flex-1 space-y-8 px-4 py-8 sm:px-8 print:max-w-none print:p-0"
+          className="mx-auto w-full max-w-6xl flex-1 space-y-8 px-3.5 pt-6 pb-24 sm:px-8 sm:py-8 md:pb-8 print:max-w-none print:p-0"
         >
           {children}
 

@@ -263,7 +263,7 @@ export function ProfileSettingsView({
         noValidate
       >
         {/* 1. Avatar Card */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Camera className="h-4 w-4 text-primary" />
@@ -271,8 +271,8 @@ export function ProfileSettingsView({
             </CardTitle>
             <CardDescription>{t("avatarHint")}</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-5">
-            <Avatar className="h-20 w-20 text-lg">
+          <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+            <Avatar className="h-20 w-20 text-lg shrink-0">
               {avatarUrl ? (
                 <AvatarImage src={avatarUrl} alt={initialProfile.displayName} />
               ) : null}
@@ -283,7 +283,7 @@ export function ProfileSettingsView({
               </AvatarFallback>
             </Avatar>
 
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -297,6 +297,7 @@ export function ProfileSettingsView({
                 size="sm"
                 disabled={uploadingAvatar}
                 onClick={() => fileInputRef.current?.click()}
+                className="w-full sm:w-auto"
               >
                 {uploadingAvatar ? (
                   <>
@@ -313,6 +314,7 @@ export function ProfileSettingsView({
                   variant="ghost"
                   size="sm"
                   onClick={handleRemoveAvatar}
+                  className="w-full sm:w-auto"
                 >
                   {t("removeAvatar")}
                 </Button>
@@ -322,14 +324,14 @@ export function ProfileSettingsView({
         </Card>
 
         {/* 2. Personal Information & Language */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <User className="h-4 w-4 text-primary" />
               {t("personalInfo")}
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-5 sm:grid-cols-2">
+          <CardContent className="grid gap-4 sm:gap-5 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="displayName">{t("displayName")}</Label>
               <Input
@@ -347,10 +349,11 @@ export function ProfileSettingsView({
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <Label htmlFor="emailReadonly">{t("emailReadonly")}</Label>
                 <Badge
                   variant={initialProfile.emailVerified ? "success" : "warning"}
+                  className="shrink-0 text-[11px]"
                 >
                   {initialProfile.emailVerified ? (
                     <>
@@ -367,6 +370,7 @@ export function ProfileSettingsView({
                 value={initialProfile.email}
                 disabled
                 readOnly
+                className="font-mono text-xs sm:text-sm bg-muted/40 truncate"
               />
             </div>
 
@@ -460,27 +464,29 @@ export function ProfileSettingsView({
               return (
                 <div
                   key={path}
-                  className="flex items-start justify-between gap-4 rounded-xl border border-border bg-secondary/25 p-4"
+                  className="flex items-start justify-between gap-3 sm:gap-4 rounded-xl border border-border bg-secondary/25 p-3.5 sm:p-4"
                 >
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground">
+                  <div className="space-y-1 min-w-0 flex-1 pr-2">
+                    <p className="text-sm font-medium text-foreground break-words">
                       {pref.title}
                     </p>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
+                    <p className="text-xs leading-relaxed text-muted-foreground break-words">
                       {pref.desc}
                     </p>
                   </div>
-                  <Controller
-                    control={profileForm.control}
-                    name={path}
-                    render={({ field }) => (
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        aria-label={pref.title}
-                      />
-                    )}
-                  />
+                  <div className="shrink-0 pt-0.5">
+                    <Controller
+                      control={profileForm.control}
+                      name={path}
+                      render={({ field }) => (
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          aria-label={pref.title}
+                        />
+                      )}
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -489,12 +495,13 @@ export function ProfileSettingsView({
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
+        <div className="flex justify-stretch sm:justify-end">
           <Button
             type="submit"
             variant="gradient"
             size="lg"
             disabled={profileForm.formState.isSubmitting}
+            className="w-full sm:w-auto min-h-12 text-sm sm:text-base font-semibold"
           >
             {profileForm.formState.isSubmitting ? (
               <>
@@ -511,7 +518,7 @@ export function ProfileSettingsView({
       <Separator />
 
       {/* 4. GDPR Data Portability & Irreversible Account Deletion */}
-      <Card className="border-destructive/30">
+      <Card className="border-destructive/30 overflow-hidden">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldAlert className="h-4 w-4 text-orange-500" />
@@ -521,8 +528,8 @@ export function ProfileSettingsView({
         </CardHeader>
         <CardContent className="space-y-5">
           {/* JSON Data Export */}
-          <div className="flex flex-col justify-between gap-4 rounded-2xl border border-border bg-secondary/25 p-5 sm:flex-row sm:items-center">
-            <div className="space-y-1">
+          <div className="flex flex-col justify-between gap-4 rounded-2xl border border-border bg-secondary/25 p-4 sm:p-5 sm:flex-row sm:items-center">
+            <div className="space-y-1 min-w-0">
               <p className="text-sm font-semibold text-foreground">
                 {t("exportTitle")}
               </p>
@@ -535,7 +542,7 @@ export function ProfileSettingsView({
               variant="outline"
               disabled={exportingData}
               onClick={handleExportPersonalData}
-              className="shrink-0"
+              className="w-full sm:w-auto shrink-0 min-h-10"
             >
               {exportingData ? (
                 <>
@@ -552,8 +559,8 @@ export function ProfileSettingsView({
           </div>
 
           {/* Full GDPR Account Deletion */}
-          <div className="flex flex-col justify-between gap-4 rounded-2xl border border-destructive/35 bg-destructive/[0.06] p-5 sm:flex-row sm:items-center">
-            <div className="space-y-1">
+          <div className="flex flex-col justify-between gap-4 rounded-2xl border border-destructive/35 bg-destructive/[0.06] p-4 sm:p-5 sm:flex-row sm:items-center">
+            <div className="space-y-1 min-w-0">
               <p className="text-sm font-semibold text-foreground">
                 {t("deleteTitle")}
               </p>
@@ -564,7 +571,7 @@ export function ProfileSettingsView({
 
             <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
               <DialogTrigger asChild>
-                <Button type="button" variant="destructive" className="shrink-0">
+                <Button type="button" variant="destructive" className="w-full sm:w-auto shrink-0 min-h-10">
                   <Trash2 className="h-4 w-4" />
                   {t("deleteButton")}
                 </Button>

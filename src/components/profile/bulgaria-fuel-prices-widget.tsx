@@ -192,7 +192,7 @@ export function BulgariaFuelPricesWidget({
             </CardDescription>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
             <Button
               type="button"
               variant="outline"
@@ -237,7 +237,7 @@ export function BulgariaFuelPricesWidget({
 
         {/* Compact Live Ticker Strip when Collapsed */}
         {collapsed && payload ? (
-          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 border-t border-border/60 pt-3">
+          <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 border-t border-border/60 pt-3">
             {payload.fuels.map((fuel) => {
               const unitLabel =
                 fuel.unit === "kg" ? t("unitKg") : t("unitLiter");
@@ -251,7 +251,7 @@ export function BulgariaFuelPricesWidget({
                     setSelectedCode(fuel.code);
                     toggleCollapsed();
                   }}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-secondary/35 px-2.5 py-1 text-xs font-mono hover:border-primary/40 hover:bg-secondary/60 transition-colors cursor-pointer text-left"
+                  className="flex items-center justify-between sm:justify-start gap-2 rounded-xl border border-border bg-secondary/35 px-2.5 py-1.5 text-xs font-mono hover:border-primary/40 hover:bg-secondary/60 transition-colors cursor-pointer text-left w-full sm:w-auto"
                 >
                   <span className="font-sans font-medium text-foreground">
                     {t(`fuels.${fuel.code}`)}:
@@ -264,7 +264,7 @@ export function BulgariaFuelPricesWidget({
                   </span>
                   <span
                     className={cn(
-                      "text-[10px] font-semibold",
+                      "text-[10px] font-semibold shrink-0",
                       isDown
                         ? "text-emerald-400"
                         : isUp
