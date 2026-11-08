@@ -110,6 +110,18 @@ const COMPLIANCE_SLOTS: ReadonlyArray<ComplianceSlotMeta> = [
   },
 ];
 
+const POPULAR_INSURERS = [
+  "ДЗИ",
+  "Лев Инс",
+  "Булстрад",
+  "Армеец",
+  "Евроинс",
+  "Алианц",
+  "Дженерали",
+  "Бул Инс",
+  "ДаллБогг",
+];
+
 type ComplianceState = "expired" | "expiring_soon" | "valid" | "missing";
 
 function computeDaysUntil(isoDate: string | null | undefined): number | null {
@@ -726,7 +738,9 @@ export function VehicleComplianceTracker({
                           card.type === "vignette" &&
                             "border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300",
                           card.type === "technical_inspection" &&
-                            "border-indigo-500/35 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300"
+                            "border-indigo-500/35 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300",
+                          card.type === "liability_insurance" &&
+                            "border-sky-500/35 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300"
                         )}
                         onClick={() => void handleOpenCheckModal(card.type)}
                       >
@@ -736,7 +750,9 @@ export function VehicleComplianceTracker({
                             ? t("checkVignetteBtn")
                             : card.type === "technical_inspection"
                               ? t("rtaCheckBtn")
-                              : t("checkBtn")}
+                              : card.type === "liability_insurance"
+                                ? t("checkLiabilityBtn")
+                                : t("checkBtn")}
                         </span>
                       </Button>
 
@@ -842,6 +858,46 @@ export function VehicleComplianceTracker({
               </div>
             </div>
 
+            {editingSlot === "liability_insurance" ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {t("popularInsurers")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalOpen(false);
+                      void handleOpenCheckModal("liability_insurance");
+                    }}
+                    className="text-[11px] text-sky-400 hover:text-sky-300 font-medium inline-flex items-center gap-1"
+                  >
+                    <Search className="h-3 w-3" />
+                    <span>{t("checkLiabilityBtn")}</span>
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {POPULAR_INSURERS.map((ins) => (
+                    <button
+                      key={ins}
+                      type="button"
+                      onClick={() => {
+                        const current = notesInput.trim();
+                        if (!current) {
+                          setNotesInput(`${ins} полица`);
+                        } else if (!current.includes(ins)) {
+                          setNotesInput(`${ins} - ${current}`);
+                        }
+                      }}
+                      className="rounded-lg border border-border bg-secondary/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300"
+                    >
+                      {ins}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="space-y-1.5">
               <Label htmlFor="compliance-notes">{t("notesLabel")}</Label>
               <Input
@@ -920,17 +976,17 @@ export function VehicleComplianceTracker({
                     ? rtaResult?.found
                       ? t("rtaCheckFoundTitle")
                       : t("rtaCheckTitle")
-                    : t(
-                        `${
-                          checkingSlot === "liability_insurance"
-                            ? "gf"
-                            : checkingSlot === "casco"
+                    : checkingSlot === "liability_insurance"
+                      ? t("globiCheckTitle")
+                      : t(
+                          `${
+                            checkingSlot === "casco"
                               ? "casco"
                               : checkingSlot === "fire_extinguisher"
                                 ? "extinguisher"
                                 : "tax"
-                        }CheckTitle`
-                      )
+                          }CheckTitle`
+                        )
                 : t("checkDialogTitle")}
             </DialogTitle>
             <DialogDescription>
@@ -1060,29 +1116,51 @@ export function VehicleComplianceTracker({
               )
             ) : null}
 
-            {/* Liability Insurance (Guarantee Fund) */}
+            {/* Liability Insurance (Globi.bg & Guarantee Fund) */}
             {checkingSlot === "liability_insurance" ? (
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-border bg-secondary/30 p-3.5 space-y-2.5">
+              <div className="space-y-4">
+                {/* Globi.bg Check Banner */}
+                <div className="rounded-2xl border border-sky-500/35 bg-sky-500/[0.08] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400">
+                        <ShieldCheck className="h-4 w-4" />
+                      </div>
+                      <span className="font-semibold text-sm text-foreground">
+                        Globi.bg • {t("items.liability_insurance")}
+                      </span>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 text-[10px] font-mono border-sky-500/30 text-sky-400 bg-sky-500/10"
+                    >
+                      globi.bg/tools
+                    </Badge>
+                  </div>
+
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    {t("gfCheckDesc")}
+                    {t("globiCheckDesc")}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2">
+
+                  {/* Plates & 1-click CTA */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 text-xs gap-1.5 font-mono"
+                      className="h-8 text-xs gap-1.5 font-mono border-sky-500/40 hover:bg-sky-500/15"
                       onClick={() =>
                         copyToClipboard(
                           activeVehicle.plateNumber,
-                          t("copiedToast")
+                          t("globiCopiedToast")
                         )
                       }
+                      title={t("copyPlate")}
                     >
                       <Copy className="h-3 w-3" />
                       <span>{activeVehicle.plateNumber}</span>
                     </Button>
+
                     {activeVehicle.vin ? (
                       <Button
                         type="button"
@@ -1100,25 +1178,56 @@ export function VehicleComplianceTracker({
                         <span>VIN: {activeVehicle.vin}</span>
                       </Button>
                     ) : null}
+
                     <Button
                       type="button"
-                      variant="secondary"
+                      variant="gradient"
                       size="sm"
-                      asChild
-                      className="h-8 text-xs gap-1.5 ml-auto"
+                      className="h-8 text-xs gap-1.5 ml-auto font-medium shadow-sm"
+                      onClick={() => {
+                        void copyToClipboard(
+                          activeVehicle.plateNumber,
+                          t("globiCopiedToast")
+                        );
+                        window.open(
+                          "https://globi.bg/tools/motor-insurance",
+                          "_blank",
+                          "noopener,noreferrer"
+                        );
+                      }}
                     >
-                      <a
-                        href="https://www.guaranteefund.org/bg/ez-spravki/proverka-za-grazhdanska-otgovornost"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        <span>{t("openGfPortal")}</span>
-                      </a>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      <span>{t("openGlobiPortal")}</span>
                     </Button>
+                  </div>
+
+                  {/* Secondary Guarantee Fund Link */}
+                  <div className="flex items-center justify-end pt-1 border-t border-sky-500/20">
+                    <a
+                      href="https://www.guaranteefund.org/bg/ez-spravki/proverka-za-grazhdanska-otgovornost"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-sky-300 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      <span>{t("openGfSecondary")}</span>
+                    </a>
                   </div>
                 </div>
 
+                {/* Step-by-Step Helper */}
+                <div className="rounded-xl border border-border/60 bg-secondary/20 p-3 text-xs space-y-1.5">
+                  <div className="font-semibold text-foreground text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Как се прави проверката:
+                  </div>
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-[11px]">
+                    <li>{t("globiStep1")}</li>
+                    <li>{t("globiStep2")}</li>
+                    <li>{t("globiStep3")}</li>
+                  </ol>
+                </div>
+
+                {/* Expiry Date with Presets */}
                 <div className="space-y-2 pt-1">
                   <Label htmlFor="check-date-gf">{t("expiryDateLabel")}</Label>
                   <Input
@@ -1174,6 +1283,33 @@ export function VehicleComplianceTracker({
                   </div>
                 </div>
 
+                {/* Popular Insurers Quick Chips */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {t("popularInsurers")}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {POPULAR_INSURERS.map((ins) => (
+                      <button
+                        key={ins}
+                        type="button"
+                        onClick={() => {
+                          const current = checkNotesInput.trim();
+                          if (!current) {
+                            setCheckNotesInput(`${ins} полица`);
+                          } else if (!current.includes(ins)) {
+                            setCheckNotesInput(`${ins} - ${current}`);
+                          }
+                        }}
+                        className="rounded-lg border border-border bg-secondary/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300"
+                      >
+                        {ins}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Notes Input */}
                 <div className="space-y-1.5">
                   <Label htmlFor="check-notes-gf">{t("notesLabel")}</Label>
                   <Input
