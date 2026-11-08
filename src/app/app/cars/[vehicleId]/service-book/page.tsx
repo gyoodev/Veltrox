@@ -12,7 +12,7 @@ export default async function VehicleServiceBookPage({
   params,
 }: ServiceBookPageProps) {
   const { vehicleId } = await params;
-  const { profile } = await requireRole(["USER"]);
+  const { profile } = await requireRole(["USER", "ADMIN"]);
   const bundle = await getUserDiaryBundle(profile.uid);
 
   const vehicle = bundle.vehicles.find((v) => v.id === vehicleId);

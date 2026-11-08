@@ -311,6 +311,8 @@
     "analyticsNav": "Analytics",
     "cmsNav": "Content & Banner",
     "auditNav": "Audit Logs",
+    "adminPanelBtn": "Admin Control Panel",
+    "userPanelBtn": "User Panel",
     "skipToContent": "Skip to main content",
     "soonBadge": "Phase 5+"
   },

@@ -26,7 +26,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import type { AppLocale } from "@/types/domain";
 
 export default async function UserDashboardPage() {
-  const { profile } = await requireRole(["USER"]);
+  const { profile } = await requireRole(["USER", "ADMIN"]);
   const bundle = await getUserDiaryBundle(profile.uid);
 
   const locale = (await getLocale()) as AppLocale;

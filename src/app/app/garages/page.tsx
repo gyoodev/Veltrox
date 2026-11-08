@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth/server-auth";
 import { getApprovedGarages, getUserDiaryBundle } from "@/lib/data/user-diary";
 
 export default async function AppGaragesDirectoryPage() {
-  const { profile } = await requireRole(["USER"]);
+  const { profile } = await requireRole(["USER", "ADMIN"]);
   const [garages, bundle, t] = await Promise.all([
     getApprovedGarages(),
     getUserDiaryBundle(profile.uid),

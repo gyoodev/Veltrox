@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth/server-auth";
 import { getUserDiaryBundle } from "@/lib/data/user-diary";
 
 export default async function ExpensesPage() {
-  const { profile } = await requireRole(["USER"]);
+  const { profile } = await requireRole(["USER", "ADMIN"]);
   const bundle = await getUserDiaryBundle(profile.uid);
   const t = await getTranslations("carDiary.expenses");
 

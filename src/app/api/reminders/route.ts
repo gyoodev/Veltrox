@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request): Promise<NextResponse> {
   const ctx = await getCurrentAuthContext();
-  if (!ctx || ctx.profile.role !== "USER") {
+  if (!ctx || (ctx.profile.role !== "USER" && ctx.profile.role !== "ADMIN")) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
@@ -41,7 +41,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
 export async function POST(request: Request): Promise<NextResponse> {
   const ctx = await getCurrentAuthContext();
-  if (!ctx || ctx.profile.role !== "USER") {
+  if (!ctx || (ctx.profile.role !== "USER" && ctx.profile.role !== "ADMIN")) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 

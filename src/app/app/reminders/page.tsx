@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/auth/server-auth";
 import { getUserDiaryBundle } from "@/lib/data/user-diary";
 
 export default async function RemindersPage() {
-  const { profile } = await requireRole(["USER"]);
+  const { profile } = await requireRole(["USER", "ADMIN"]);
   const bundle = await getUserDiaryBundle(profile.uid);
 
   return (

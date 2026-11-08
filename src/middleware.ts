@@ -55,7 +55,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    if (isUserRoute && session.role !== "USER") {
+    if (isUserRoute && session.role !== "USER" && session.role !== "ADMIN") {
       const target = getRoleHomePath(session.role, session.garageStatus);
       return applyLocaleCookie(
         NextResponse.redirect(new URL(target, request.url))

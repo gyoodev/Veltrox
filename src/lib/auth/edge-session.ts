@@ -171,7 +171,7 @@ export function getRoleHomePath(
 ): string {
   switch (role) {
     case "ADMIN":
-      return "/admin";
+      return "/app";
     case "GARAGE_OWNER":
       return garageStatus === "approved" ? "/garage" : "/garage/pending";
     case "USER":

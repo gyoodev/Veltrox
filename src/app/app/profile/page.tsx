@@ -4,7 +4,7 @@ import { fetchBulgariaFuelPrices } from "@/lib/fuel-prices";
 
 export default async function UserProfilePage() {
   const [{ profile }, fuelPrices] = await Promise.all([
-    requireRole(["USER"]),
+    requireRole(["USER", "ADMIN"]),
     fetchBulgariaFuelPrices(),
   ]);
   return (

@@ -7,7 +7,7 @@ export default async function UserWorkspaceLayout({
 }: {
   children: ReactNode;
 }) {
-  const { profile } = await requireRole(["USER"]);
+  const { profile } = await requireRole(["USER", "ADMIN"]);
 
   return <DashboardShell profile={profile}>{children}</DashboardShell>;
 }

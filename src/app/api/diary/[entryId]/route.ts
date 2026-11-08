@@ -15,7 +15,7 @@ export async function PATCH(
   context: RouteContext
 ): Promise<NextResponse> {
   const ctx = await getCurrentAuthContext();
-  if (!ctx || ctx.profile.role !== "USER") {
+  if (!ctx || (ctx.profile.role !== "USER" && ctx.profile.role !== "ADMIN")) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
@@ -125,7 +125,7 @@ export async function DELETE(
   context: RouteContext
 ): Promise<NextResponse> {
   const ctx = await getCurrentAuthContext();
-  if (!ctx || ctx.profile.role !== "USER") {
+  if (!ctx || (ctx.profile.role !== "USER" && ctx.profile.role !== "ADMIN")) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 

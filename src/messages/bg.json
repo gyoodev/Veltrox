@@ -311,6 +311,8 @@
     "analyticsNav": "Анализи",
     "cmsNav": "Съдържание и банер",
     "auditNav": "Одитен дневник",
+    "adminPanelBtn": "Админ контролен панел",
+    "userPanelBtn": "Потребителски панел",
     "skipToContent": "Към основното съдържание",
     "soonBadge": "Фаза 5+"
   },

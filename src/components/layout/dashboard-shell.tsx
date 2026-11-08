@@ -75,6 +75,9 @@ export function DashboardShell({
 
   const activeProfile = clientProfile ?? serverProfile;
 
+  const isAdminSection =
+    pathname === "/admin" || pathname.startsWith("/admin/");
+
   const isPendingGarage =
     activeProfile.role === "GARAGE_OWNER" &&
     activeProfile.garageStatus !== "approved";
@@ -84,7 +87,9 @@ export function DashboardShell({
 
   const homeHref =
     activeProfile.role === "ADMIN"
-      ? "/admin"
+      ? isAdminSection
+        ? "/admin"
+        : "/app"
       : activeProfile.role === "GARAGE_OWNER"
         ? isPendingGarage
           ? "/garage/pending"
@@ -93,7 +98,9 @@ export function DashboardShell({
 
   const profileHref =
     activeProfile.role === "ADMIN"
-      ? "/admin/profile"
+      ? isAdminSection
+        ? "/admin/profile"
+        : "/app/profile"
       : activeProfile.role === "GARAGE_OWNER"
         ? "/garage/profile"
         : "/app/profile";
@@ -193,98 +200,102 @@ export function DashboardShell({
     return items;
   };
 
+  const userNavLinks: NavItem[] = [
+    {
+      href: "/app",
+      label: tShell("overview"),
+      icon: LayoutDashboard,
+      mobilePrimary: true,
+    },
+    {
+      href: "/app/cars",
+      label: tShell("carsNav"),
+      icon: Car,
+      mobilePrimary: true,
+    },
+    {
+      href: "/app/expenses",
+      label: tShell("expensesNav"),
+      icon: PieChart,
+      mobilePrimary: true,
+    },
+    {
+      href: "/app/reminders",
+      label: tShell("remindersNav"),
+      icon: BellRing,
+      mobilePrimary: true,
+    },
+    {
+      href: "/app/documents",
+      label: tShell("documentsNav"),
+      icon: FolderLock,
+      mobilePrimary: false,
+    },
+    {
+      href: "/app/garages",
+      label: tShell("findGarageNav"),
+      icon: Compass,
+      mobilePrimary: true,
+    },
+    {
+      href: "/app/profile",
+      label: tShell("profile"),
+      icon: UserCircle2,
+      mobilePrimary: false,
+    },
+  ];
+
+  const adminNavLinks: NavItem[] = [
+    {
+      href: "/admin",
+      label: tShell("overview"),
+      icon: Shield,
+      mobilePrimary: true,
+    },
+    {
+      href: "/admin/approvals",
+      label: tShell("approvalsNav"),
+      icon: Building2,
+      mobilePrimary: true,
+    },
+    {
+      href: "/admin/users",
+      label: tShell("usersNav"),
+      icon: Users,
+      mobilePrimary: true,
+    },
+    {
+      href: "/admin/analytics",
+      label: tShell("analyticsNav"),
+      icon: BarChart3,
+      mobilePrimary: true,
+    },
+    {
+      href: "/admin/content",
+      label: tShell("cmsNav"),
+      icon: Megaphone,
+      mobilePrimary: false,
+    },
+    {
+      href: "/admin/audit-logs",
+      label: tShell("auditNav"),
+      icon: FileClock,
+      mobilePrimary: true,
+    },
+    {
+      href: "/admin/profile",
+      label: tShell("profile"),
+      icon: UserCircle2,
+      mobilePrimary: false,
+    },
+  ];
+
   const navLinks: NavItem[] =
-    activeProfile.role === "USER"
-      ? [
-          {
-            href: "/app",
-            label: tShell("overview"),
-            icon: LayoutDashboard,
-            mobilePrimary: true,
-          },
-          {
-            href: "/app/cars",
-            label: tShell("carsNav"),
-            icon: Car,
-            mobilePrimary: true,
-          },
-          {
-            href: "/app/expenses",
-            label: tShell("expensesNav"),
-            icon: PieChart,
-            mobilePrimary: true,
-          },
-          {
-            href: "/app/reminders",
-            label: tShell("remindersNav"),
-            icon: BellRing,
-            mobilePrimary: true,
-          },
-          {
-            href: "/app/documents",
-            label: tShell("documentsNav"),
-            icon: FolderLock,
-            mobilePrimary: false,
-          },
-          {
-            href: "/app/garages",
-            label: tShell("findGarageNav"),
-            icon: Compass,
-            mobilePrimary: true,
-          },
-          {
-            href: "/app/profile",
-            label: tShell("profile"),
-            icon: UserCircle2,
-            mobilePrimary: false,
-          },
-        ]
-      : activeProfile.role === "GARAGE_OWNER"
-        ? buildGarageNavLinks()
-        : [
-            {
-              href: "/admin",
-              label: tShell("overview"),
-              icon: Shield,
-              mobilePrimary: true,
-            },
-            {
-              href: "/admin/approvals",
-              label: tShell("approvalsNav"),
-              icon: Building2,
-              mobilePrimary: true,
-            },
-            {
-              href: "/admin/users",
-              label: tShell("usersNav"),
-              icon: Users,
-              mobilePrimary: true,
-            },
-            {
-              href: "/admin/analytics",
-              label: tShell("analyticsNav"),
-              icon: BarChart3,
-              mobilePrimary: true,
-            },
-            {
-              href: "/admin/content",
-              label: tShell("cmsNav"),
-              icon: Megaphone,
-              mobilePrimary: false,
-            },
-            {
-              href: "/admin/audit-logs",
-              label: tShell("auditNav"),
-              icon: FileClock,
-              mobilePrimary: true,
-            },
-            {
-              href: "/admin/profile",
-              label: tShell("profile"),
-              icon: UserCircle2,
-              mobilePrimary: false,
-            },
-          ];
+    activeProfile.role === "GARAGE_OWNER"
+      ? buildGarageNavLinks()
+      : activeProfile.role === "ADMIN" && isAdminSection
+        ? adminNavLinks
+        : userNavLinks;
 
   const mobileLinks = navLinks.filter((i) => i.mobilePrimary);
 
@@ -381,6 +392,36 @@ export function DashboardShell({
           })}
         </nav>
 
+        {activeProfile.role === "ADMIN" ? (
+          <div className="px-3 pb-2">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className={cn(
+                "w-full justify-start h-9 gap-2 text-xs font-semibold rounded-xl transition-all shadow-sm",
+                isAdminSection
+                  ? "border-primary/45 text-primary bg-primary/[0.08] hover:bg-primary/15"
+                  : "border-amber-500/50 text-amber-400 bg-amber-500/[0.08] hover:bg-amber-500/15"
+              )}
+            >
+              <Link href={isAdminSection ? "/app" : "/admin"}>
+                {isAdminSection ? (
+                  <>
+                    <LayoutDashboard className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{tShell("userPanelBtn")}</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="h-4 w-4 shrink-0 text-amber-400" />
+                    <span className="truncate">{tShell("adminPanelBtn")}</span>
+                  </>
+                )}
+              </Link>
+            </Button>
+          </div>
+        ) : null}
+
         <div className="border-t border-border p-4">
           <Button
             variant="ghost"
@@ -407,6 +448,40 @@ export function DashboardShell({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {activeProfile.role === "ADMIN" ? (
+              <Button
+                asChild
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "h-8 gap-1.5 px-2.5 text-xs font-semibold mr-1 shadow-sm transition-all rounded-xl",
+                  isAdminSection
+                    ? "border-primary/45 text-primary bg-primary/[0.08] hover:bg-primary/15"
+                    : "border-amber-500/50 text-amber-400 bg-amber-500/[0.08] hover:bg-amber-500/15"
+                )}
+              >
+                <Link href={isAdminSection ? "/app" : "/admin"}>
+                  {isAdminSection ? (
+                    <>
+                      <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
+                      <span className="hidden sm:inline">
+                        {tShell("userPanelBtn")}
+                      </span>
+                      <span className="sm:hidden">Потребителски</span>
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                      <span className="hidden sm:inline">
+                        {tShell("adminPanelBtn")}
+                      </span>
+                      <span className="sm:hidden">Админ</span>
+                    </>
+                  )}
+                </Link>
+              </Button>
+            ) : null}
+
             <NotificationBell />
             <LanguageSwitcher />
             <ThemeToggle />
@@ -476,12 +551,26 @@ export function DashboardShell({
                   </>
                 ) : null}
                 {activeProfile.role === "ADMIN" ? (
-                  <DropdownMenuItem asChild>
-                    <Link href="/admin/content">
-                      <Megaphone className="h-4 w-4" />
-                      {tShell("cmsNav")}
-                    </Link>
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin">
+                        <Shield className="h-4 w-4 text-amber-400" />
+                        <span>{tShell("adminPanelBtn")}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/app">
+                        <LayoutDashboard className="h-4 w-4 text-primary" />
+                        <span>{tShell("userPanelBtn")}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/content">
+                        <Megaphone className="h-4 w-4" />
+                        {tShell("cmsNav")}
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
                 ) : null}
                 <DropdownMenuItem asChild>
                   <Link href={profileHref}>
