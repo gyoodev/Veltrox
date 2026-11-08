@@ -10,6 +10,7 @@ export default async function RemindersPage() {
     <RemindersListClient
       initialReminders={bundle.reminders}
       vehicles={bundle.vehicles}
+      documents={bundle.documents}
       showPageHeader
     />
   );

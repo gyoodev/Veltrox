@@ -11,28 +11,47 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 function loadEnvLocal(): void {
   const envPath = resolve(process.cwd(), ".env.local");
-  if (!existsSync(envPath)) return;
-  const content = readFileSync(envPath, "utf8");
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eqIdx = line.indexOf("=");
-    if (eqIdx === -1) continue;
-    const key = line.slice(0, eqIdx).trim();
-    let value = line.slice(eqIdx + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
+  if (existsSync(envPath)) {
+    const content = readFileSync(envPath, "utf8");
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eqIdx = line.indexOf("=");
+      if (eqIdx === -1) continue;
+      const key = line.slice(0, eqIdx).trim();
+      let value = line.slice(eqIdx + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
     }
-    if (!process.env[key]) {
-      process.env[key] = value;
+  }
+
+  if (!process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+    const candidate = readdirSync(process.cwd()).find(
+      (name) =>
+        name === "serviceAccountKey.json" ||
+        (name.includes("firebase-adminsdk") && name.endsWith(".json"))
+    );
+    if (candidate) {
+      const parsed = JSON.parse(
+        readFileSync(resolve(process.cwd(), candidate), "utf8")
+      ) as { project_id?: string; client_email?: string; private_key?: string };
+      if (parsed.project_id && parsed.client_email && parsed.private_key) {
+        process.env.FIREBASE_PROJECT_ID ||= parsed.project_id;
+        process.env.FIREBASE_CLIENT_EMAIL = parsed.client_email;
+        process.env.FIREBASE_PRIVATE_KEY = parsed.private_key;
+      }
     }
   }
 }

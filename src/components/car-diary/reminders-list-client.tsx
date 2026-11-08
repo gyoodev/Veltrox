@@ -11,20 +11,27 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ReminderDialog } from "@/components/car-diary/reminder-dialog";
+import { VehicleComplianceTracker } from "@/components/car-diary/vehicle-compliance-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { evaluateReminderUrgency } from "@/lib/diary-metrics";
 import { formatDate } from "@/lib/utils";
-import type { AppLocale, Reminder, Vehicle } from "@/types/domain";
+import type {
+  AppLocale,
+  Reminder,
+  Vehicle,
+  VehicleDocument,
+} from "@/types/domain";
 
 interface RemindersListClientProps {
   initialReminders: Reminder[];
   vehicles: Vehicle[];
+  documents?: VehicleDocument[];
   scopedVehicleId?: string;
   showPageHeader?: boolean;
 }
@@ -32,6 +39,7 @@ interface RemindersListClientProps {
 export function RemindersListClient({
   initialReminders,
   vehicles,
+  documents = [],
   scopedVehicleId,
   showPageHeader = false,
 }: RemindersListClientProps) {
@@ -42,6 +50,10 @@ export function RemindersListClient({
 
   const [reminders, setReminders] = useState<Reminder[]>(initialReminders);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    setReminders(initialReminders);
+  }, [initialReminders]);
 
   const vehicleMap = useMemo(
     () => new Map(vehicles.map((v) => [v.id, v])),
@@ -132,6 +144,22 @@ export function RemindersListClient({
           {t("addReminder")}
         </Button>
       </div>
+
+      {showPageHeader && vehicles.length > 0 ? (
+        <VehicleComplianceTracker
+          vehicles={vehicles}
+          initialReminders={reminders}
+          documents={documents}
+          onReminderUpserted={(saved) => {
+            setReminders((prev) => {
+              const exists = prev.some((r) => r.id === saved.id);
+              return exists
+                ? prev.map((r) => (r.id === saved.id ? saved : r))
+                : [saved, ...prev];
+            });
+          }}
+        />
+      ) : null}
 
       {sortedReminders.length === 0 ? (
         <EmptyState

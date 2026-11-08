@@ -1,9 +1,16 @@
 import type { NotificationChannel } from "@/lib/notifications/types";
-import type {
-  NotificationPreferences,
-  Reminder,
-  VehicleDocument,
+import {
+  COMPLIANCE_REMINDER_TYPES,
+  type NotificationPreferences,
+  type Reminder,
+  type ReminderType,
+  type VehicleDocument,
 } from "@/types/domain";
+
+export function isComplianceReminderType(type?: ReminderType | null): boolean {
+  if (!type) return false;
+  return (COMPLIANCE_REMINDER_TYPES as readonly string[]).includes(type);
+}
 
 export interface ReminderEvaluation {
   shouldSend: boolean;
@@ -27,7 +34,9 @@ function toUtcMidnightMs(isoDateOrTimestamp: string): number | null {
  * - Mileage threshold: vehicle odometer within `leadKm` (default 500 km) of `dueMileageKm` or exceeded.
  */
 export function evaluateReminderDueState(
-  reminder: Pick<Reminder, "status" | "dueDate" | "dueMileageKm">,
+  reminder: Pick<Reminder, "status" | "dueDate" | "dueMileageKm"> & {
+    type?: ReminderType;
+  },
   currentVehicleMileageKm: number | null,
   now = new Date(),
   options?: { leadDays?: number; leadKm?: number }
@@ -41,7 +50,8 @@ export function evaluateReminderDueState(
     };
   }
 
-  const leadDays = options?.leadDays ?? 7;
+  const defaultLeadDays = isComplianceReminderType(reminder.type) ? 14 : 7;
+  const leadDays = options?.leadDays ?? defaultLeadDays;
   const leadKm = options?.leadKm ?? 500;
   const todayUtcMs = Date.UTC(
     now.getUTCFullYear(),

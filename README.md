@@ -37,6 +37,7 @@ Veltrox connects **car owners** and **independent automotive workshops** in one 
 - **Documents Vault**: Store insurance policies, vignettes, technical inspections (GTP), tax receipts, and driving licenses with expiry countdown alerts.
 - **Printable PDF Service Book**: Cyrillic-safe, print-optimized vehicle history dossier (`/app/cars/[vehicleId]/service-book`) ready for resale buyers.
 - **Public Garage Directory & Online Booking**: Browse verified workshops by city and specialty (`/garages`, `/garages/[slug]`), submit online appointment requests, and receive automatic service diary entries from linked garages.
+- **Live Bulgaria Fuel Prices Widget (`/app/profile`, `/garage/profile`, `/admin/profile`)**: Real-time Bulgarian retail pump averages (`Petrol A95`, `Diesel`, `LPG`, `CNG/Methane`) in `EUR` + fixed-rate `BGN`, 30-day Recharts trend sparklines, and an interactive trip fuel cost calculator.
 
 ### 2. Garages & Workshop Staff (`GARAGE_OWNER` — `/garage/*`)
 - **Approval-Gated Onboarding Wizard**: Newly registered garages start in `pending` state until verified, then complete a guided setup for business profile, city, services catalog, working hours, logo, and public directory slug.
@@ -92,8 +93,9 @@ Veltrox connects **car owners** and **independent automotive workshops** in one 
 
 ```text
 Veltrox/
-├── functions/                     # Firebase Cloud Functions v2 daily reminder scheduler
-│   ├── src/index.ts               # onSchedule("every day 07:00", Europe/Sofia) sweep
+├── functions/                     # Firebase Cloud Functions v2 (europe-west1, Node 20)
+│   ├── src/index.ts               # dailyVeltroxReminderSweep + WorkOrder & Appointment triggers
+│   ├── .env.example               # Functions runtime env template (RESEND_API_KEY, etc.)
 │   ├── package.json
 │   └── tsconfig.json
 ├── scripts/
@@ -257,12 +259,14 @@ All user-facing copy lives in `src/messages/bg.json` (Bulgarian default) and `sr
 
 ## Production Deployment (Vercel + Firebase)
 
-1. **Deploy Firebase Security, Indexes & Scheduled Functions**:
+1. **Deploy Firebase Security, Indexes & Cloud Functions v2**:
    ```bash
-   npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage
-   # Optional (Blaze plan): deploy Cloud Functions v2 daily reminder scheduler
-   cd functions && npm install && npm run build && cd ..
-   npx firebase-tools deploy --only functions
+   # Deploy Firestore rules, composite indexes, and Storage rules
+   npm run firebase:deploy:rules
+
+   # Optional (Blaze plan): install, build & deploy Cloud Functions v2 (europe-west1)
+   npm run functions:install
+   npm run firebase:deploy:functions
    ```
 2. **Import Project into Vercel**:
    - Connect the GitHub repository in Vercel (`vercel.json` automatically registers the daily `/api/cron/reminders` job).

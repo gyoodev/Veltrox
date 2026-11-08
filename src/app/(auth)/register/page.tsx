@@ -94,8 +94,24 @@ function RegisterFormContent() {
       router.refresh();
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
+      const message = (err as { message?: string })?.message;
+      if (message === "FIREBASE_ADMIN_NOT_CONFIGURED") {
+        toast.error(t("errors.adminNotConfigured"));
+        return;
+      }
       if (code === "auth/email-already-in-use") {
         toast.error(t("errors.emailInUse"));
+        return;
+      }
+      if (
+        code === "auth/operation-not-allowed" ||
+        code === "auth/configuration-not-found"
+      ) {
+        toast.error(t("errors.providerDisabled"));
+        return;
+      }
+      if (code === "auth/unauthorized-domain") {
+        toast.error(t("errors.unauthorizedDomain"));
         return;
       }
       toast.error(t("errors.generic"));
@@ -123,8 +139,18 @@ function RegisterFormContent() {
       router.refresh();
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
-      if (code === "auth/popup-closed-by-user") {
+      const message = (err as { message?: string })?.message;
+      if (message === "FIREBASE_ADMIN_NOT_CONFIGURED") {
+        toast.error(t("errors.adminNotConfigured"));
+      } else if (code === "auth/popup-closed-by-user") {
         toast.error(t("errors.popupClosed"));
+      } else if (
+        code === "auth/operation-not-allowed" ||
+        code === "auth/configuration-not-found"
+      ) {
+        toast.error(t("errors.providerDisabled"));
+      } else if (code === "auth/unauthorized-domain") {
+        toast.error(t("errors.unauthorizedDomain"));
       } else {
         toast.error(t("errors.generic"));
       }

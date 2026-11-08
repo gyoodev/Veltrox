@@ -248,6 +248,9 @@
       "tooManyRequests": "Твърде много опити. Моля, изчакайте малко и опитайте отново.",
       "popupClosed": "Прозорецът за Google вход беше затворен.",
       "accountSuspended": "Този акаунт е временно ограничен. Свържете се с поддръжката.",
+      "adminNotConfigured": "Липсва Firebase Admin ключ (Service Account). Поставете serviceAccountKey.json в главната папка или изпълнете npm run import-admin-key.",
+      "providerDisabled": "Този метод за вход не е активиран във Firebase Console -> Authentication -> Sign-in method (включете Email/Password и Google).",
+      "unauthorizedDomain": "Домейнът не е разрешен във Firebase Console -> Authentication -> Settings -> Authorized domains.",
       "generic": "Възникна грешка при автентикация. Моля, опитайте отново."
     }
   },
@@ -466,17 +469,71 @@
       "technical_inspection": "Годишен технически преглед (ГТП)",
       "liability_insurance": "Гражданска отговорност (ГО)",
       "vignette": "Електронна винетка",
+      "casco": "Автокаско (Каско)",
+      "fire_extinguisher": "Пожарогасител (заверка)",
+      "vehicle_tax": "Годишен данък МПС",
       "oil_change": "Смяна на масло и филтри",
       "seasonal_tyres": "Сезонна смяна на гуми",
       "custom_service": "Друго обслужване"
     },
     "docTypes": {
-      "insurance": "Гражданска отговорност / Каско",
+      "insurance": "Гражданска отговорност",
+      "casco": "Полица Автокаско",
       "registration": "Регистрационен талон",
-      "vignette": "Винетка",
+      "vignette": "Електронна винетка",
       "inspection": "Удостоверение за ГТП",
+      "fire_extinguisher": "Стикер / протокол за пожарогасител",
+      "vehicle_tax": "Квитанция за данък МПС",
       "invoice": "Сервизна фактура / Гаранция",
       "other": "Друг документ"
+    },
+    "compliance": {
+      "sectionTitle": "Задължителни срокове и застраховки на МПС",
+      "sectionSubtitle": "Проследявайте валидността на Гражданска отговорност, Винетка, ГТП, Каско, Пожарогасител и Данък МПС с автоматично известие преди изтичане.",
+      "attentionBadge": "{count} за подновяване",
+      "configuredBadge": "{count}/6 активни",
+      "selectVehicleAria": "Избери автомобил за проверка на срокове",
+      "statusExpired": "Изтекъл",
+      "statusSoon": "Изтича скоро",
+      "statusValid": "Активен",
+      "statusNotSet": "Не е зададен",
+      "daysOverdue": "Просрочено с {days} дни",
+      "expiresToday": "Изтича днес!",
+      "daysRemaining": "Остават {days} дни",
+      "notConfiguredPrompt": "Въведете крайна дата за автоматично следене и известие.",
+      "alertLeadLabel": "Известие 14 дни по-рано",
+      "renewBtn": "Поднови",
+      "editBtn": "Промени",
+      "setExpiryBtn": "Задай дата",
+      "expiryDateLabel": "Валидно до (крайна дата)",
+      "quickAddLabel": "Бърз избор",
+      "preset1m": "+1 мес.",
+      "preset3m": "+3 мес.",
+      "preset1y": "+1 год.",
+      "notesLabel": "Бележка / № на полица, вноска или община (по избор)",
+      "notesPlaceholder": "напр. ДЗИ полица №..., вноска 2/4, Годишна винетка",
+      "autoAlertTitle": "Автоматично известие (Камбанка + Имейл)",
+      "autoAlertDesc": "Ще получите известие в профила си и по имейл 14 дни преди изтичане на срока (или веднага, ако до падежа остават ≤ 14 дни).",
+      "dateRequiredToast": "Моля, изберете валидна дата на изтичане.",
+      "savedToast": "Срокът и автоматичното известие са запазени!",
+      "savedWithInstantAlertToast": "Срокът изтича скоро — изпратихме активно известие във Вашия профил!",
+      "saveErrorToast": "Грешка при запазване на срока.",
+      "items": {
+        "liability_insurance": "Гражданска отговорност",
+        "vignette": "Винетка",
+        "technical_inspection": "Технически преглед",
+        "casco": "Каско",
+        "fire_extinguisher": "Пожарогасител",
+        "vehicle_tax": "Данък МПС"
+      },
+      "hints": {
+        "liability_insurance": "Полица / поредна вноска ГО",
+        "vignette": "Електронна винетка (БГТОЛ)",
+        "technical_inspection": "Годишен технически преглед (ГТП)",
+        "casco": "Пълно или частично автокаско",
+        "fire_extinguisher": "Годишна проверка и стикер",
+        "vehicle_tax": "Общински годишен данък МПС"
+      }
     },
     "overview": {
       "addCarCta": "Добави автомобил",
@@ -1110,6 +1167,27 @@
       "actorLabel": "Извършител",
       "targetUserLabel": "Потребител",
       "targetGarageLabel": "Сервиз"
+    }
+  },
+  "fuelWidget": {
+    "title": "Актуални цени на горивата в България",
+    "liveBadge": "На живо • BG",
+    "subtitle": "Средни цени на дребно по бензиностанциите в България (EUR и фиксиран курс BGN)",
+    "refreshBtn": "Обнови",
+    "unavailable": "Данните за цените на горивата са временно недостъпни. Моля, опитайте отново след малко.",
+    "unitLiter": "л",
+    "unitKg": "кг",
+    "bgnShort": "лв.",
+    "trend30dTitle": "30-дневна динамика — {fuel}",
+    "calculatorTitle": "Бърз калкулатор за гориво",
+    "distanceKmLabel": "Разстояние (км)",
+    "consumptionLabel": "Разход ({unit}/100 км)",
+    "estimatedCost": "Прогнозна цена за пътуване",
+    "fuels": {
+      "gasoline": "Бензин А95",
+      "diesel": "Дизел",
+      "lpg": "Пропан-бутан (LPG)",
+      "methane": "Метан (CNG)"
     }
   }
 }

@@ -248,6 +248,9 @@
       "tooManyRequests": "Too many attempts. Please wait a moment and try again.",
       "popupClosed": "Google sign-in window was closed before completing.",
       "accountSuspended": "This account has been suspended. Please contact support.",
+      "adminNotConfigured": "Firebase Admin Service Account key is missing. Drop serviceAccountKey.json into the project root or run npm run import-admin-key.",
+      "providerDisabled": "Sign-in provider is not enabled yet in Firebase Console -> Authentication -> Sign-in method (enable Email/Password and Google).",
+      "unauthorizedDomain": "This domain is not listed under Firebase Console -> Authentication -> Settings -> Authorized domains.",
       "generic": "Authentication could not be completed. Please try again."
     }
   },
@@ -466,17 +469,71 @@
       "technical_inspection": "Annual Technical Inspection",
       "liability_insurance": "Civil Liability Insurance",
       "vignette": "e-Vignette",
+      "casco": "Casco Insurance",
+      "fire_extinguisher": "Fire Extinguisher Check",
+      "vehicle_tax": "Annual Vehicle Tax",
       "oil_change": "Oil & Filter Service",
       "seasonal_tyres": "Seasonal Tyre Swap",
       "custom_service": "Custom Service"
     },
     "docTypes": {
-      "insurance": "Insurance Policy",
+      "insurance": "Civil Liability Insurance",
+      "casco": "Casco Insurance Policy",
       "registration": "Vehicle Registration",
       "vignette": "e-Vignette Receipt",
       "inspection": "Technical Inspection Certificate",
+      "fire_extinguisher": "Fire Extinguisher Sticker / Cert",
+      "vehicle_tax": "Vehicle Tax Receipt",
       "invoice": "Service Invoice / Warranty",
       "other": "Other Document"
+    },
+    "compliance": {
+      "sectionTitle": "Vehicle Obligations & Expiry Tracker",
+      "sectionSubtitle": "Track Liability Insurance, Vignette, Technical Inspection, Casco, Fire Extinguisher, and Vehicle Tax with automatic expiry notifications.",
+      "attentionBadge": "{count} due for renewal",
+      "configuredBadge": "{count}/6 active",
+      "selectVehicleAria": "Select vehicle for compliance tracking",
+      "statusExpired": "Expired",
+      "statusSoon": "Expiring soon",
+      "statusValid": "Active",
+      "statusNotSet": "Not set",
+      "daysOverdue": "{days}d overdue",
+      "expiresToday": "Expires today!",
+      "daysRemaining": "{days} days left",
+      "notConfiguredPrompt": "Set an expiry date to enable automatic tracking and alerts.",
+      "alertLeadLabel": "14-day advance alert",
+      "renewBtn": "Renew",
+      "editBtn": "Edit",
+      "setExpiryBtn": "Set date",
+      "expiryDateLabel": "Valid until (expiry date)",
+      "quickAddLabel": "Quick add",
+      "preset1m": "+1 mo",
+      "preset3m": "+3 mo",
+      "preset1y": "+1 yr",
+      "notesLabel": "Notes / Policy #, installment, or municipality (optional)",
+      "notesPlaceholder": "e.g. Policy #..., installment 2/4, Annual e-Vignette",
+      "autoAlertTitle": "Automatic Notification (In-App Bell + Email)",
+      "autoAlertDesc": "You will receive an in-app and email alert 14 days before expiry (or immediately if ≤ 14 days remain).",
+      "dateRequiredToast": "Please select a valid expiry date.",
+      "savedToast": "Expiry date and automatic notification saved!",
+      "savedWithInstantAlertToast": "Expiring soon — an active alert was sent to your notification center!",
+      "saveErrorToast": "Failed to save expiry date.",
+      "items": {
+        "liability_insurance": "Liability Insurance",
+        "vignette": "e-Vignette",
+        "technical_inspection": "Technical Inspection",
+        "casco": "Casco Insurance",
+        "fire_extinguisher": "Fire Extinguisher",
+        "vehicle_tax": "Vehicle Tax"
+      },
+      "hints": {
+        "liability_insurance": "Mandatory civil liability policy",
+        "vignette": "Road e-Vignette (BGTOLL)",
+        "technical_inspection": "Annual MOT / GTP inspection",
+        "casco": "Comprehensive Casco coverage",
+        "fire_extinguisher": "Annual inspection & sticker",
+        "vehicle_tax": "Municipal annual vehicle tax"
+      }
     },
     "overview": {
       "addCarCta": "Add vehicle",
@@ -1110,6 +1167,27 @@
       "actorLabel": "Actor",
       "targetUserLabel": "Target User",
       "targetGarageLabel": "Target Garage"
+    }
+  },
+  "fuelWidget": {
+    "title": "Actual Fuel Prices in Bulgaria",
+    "liveBadge": "Live • BG",
+    "subtitle": "Average retail pump prices across Bulgarian stations (EUR & BGN fixed rate)",
+    "refreshBtn": "Refresh",
+    "unavailable": "Live fuel prices are temporarily unavailable. Please try refreshing shortly.",
+    "unitLiter": "L",
+    "unitKg": "kg",
+    "bgnShort": "BGN",
+    "trend30dTitle": "30-day average trend — {fuel}",
+    "calculatorTitle": "Quick Trip Fuel Cost Estimator",
+    "distanceKmLabel": "Trip distance (km)",
+    "consumptionLabel": "Consumption ({unit}/100 km)",
+    "estimatedCost": "Estimated fuel cost",
+    "fuels": {
+      "gasoline": "Petrol A95",
+      "diesel": "Diesel",
+      "lpg": "Autogas (LPG)",
+      "methane": "Methane (CNG)"
     }
   }
 }

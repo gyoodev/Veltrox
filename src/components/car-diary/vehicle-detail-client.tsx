@@ -34,6 +34,7 @@ import { DiaryEntryDialog } from "@/components/car-diary/diary-entry-dialog";
 import { DocumentsVaultClient } from "@/components/car-diary/documents-vault-client";
 import { ExpenseCharts } from "@/components/car-diary/expense-charts";
 import { RemindersListClient } from "@/components/car-diary/reminders-list-client";
+import { VehicleComplianceTracker } from "@/components/car-diary/vehicle-compliance-tracker";
 import { VehicleFormDialog } from "@/components/car-diary/vehicle-form-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,8 @@ export function VehicleDetailClient({
 
   const [vehicle, setVehicle] = useState<Vehicle>(initialVehicle);
   const [entries, setEntries] = useState<DiaryEntry[]>(initialEntries);
+  const [remindersState, setRemindersState] =
+    useState<Reminder[]>(initialReminders);
 
   const [editVehicleOpen, setEditVehicleOpen] = useState(false);
   const [mileageInput, setMileageInput] = useState<string>(
@@ -457,6 +460,22 @@ export function VehicleDetailClient({
         </div>
       </Card>
 
+      {/* 6-Item Vehicle Obligations & Expiry Tracker scoped to this vehicle */}
+      <VehicleComplianceTracker
+        vehicles={[vehicle]}
+        initialReminders={remindersState}
+        documents={initialDocuments}
+        scopedVehicleId={vehicle.id}
+        onReminderUpserted={(saved) => {
+          setRemindersState((prev) => {
+            const exists = prev.some((r) => r.id === saved.id);
+            return exists
+              ? prev.map((r) => (r.id === saved.id ? saved : r))
+              : [saved, ...prev];
+          });
+        }}
+      />
+
       {/* 4-Tab Vehicle Workspace */}
       <Tabs defaultValue="timeline" className="w-full">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
@@ -685,7 +704,7 @@ export function VehicleDetailClient({
         {/* TAB 3: REMINDERS */}
         <TabsContent value="reminders" className="pt-2">
           <RemindersListClient
-            initialReminders={initialReminders}
+            initialReminders={remindersState}
             vehicles={[vehicle]}
             scopedVehicleId={vehicle.id}
           />

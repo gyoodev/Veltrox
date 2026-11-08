@@ -1,21 +1,41 @@
 /**
- * Veltrox — Firebase Cloud Functions v2 Daily Reminder & Document Expiry Scheduler
+ * Veltrox — Firebase Cloud Functions (Gen 2, europe-west1)
  *
- * Runs daily at 07:00 Europe/Sofia:
- * 1. Evaluates scheduled reminders due within <= 7 days or <= 500 km of linked vehicle mileage.
- * 2. Evaluates vehicle vault documents expiring within <= 14 days (deduplicated per expiry cycle).
- * 3. Enforces garage monthly reminder quotas (Free: 50/mo, Pro: 500/mo).
- * 4. Dispatches Email via Resend HTTP (with mock SMS/Viber provider adapters) and writes
- *    in-app `notifications` + immutable `REMINDER_ENGINE_RUN` audit logs.
+ * Configured Functions:
+ * 1. `dailyVeltroxReminderSweep` (Scheduled: every day 07:00 Europe/Sofia)
+ *    - Evaluates scheduled reminders due within <= 7 days or <= 500 km of linked vehicle mileage.
+ *    - Evaluates vehicle vault documents expiring within <= 14 days (idempotent per expiry cycle).
+ *    - Enforces garage monthly reminder quotas (Free: 50/mo, Pro: 500/mo).
+ *    - Dispatches Email via Resend HTTP (with graceful simulation fallback) + writes in-app
+ *      `notifications` and immutable `REMINDER_ENGINE_RUN` audit logs.
+ *
+ * 2. `onWorkOrderStatusChanged` (Firestore Trigger: `workOrders/{workOrderId}`)
+ *    - Cleans up `workOrderPublicStatus/{token}` automatically when a work order is deleted.
+ *    - Notifies the linked car owner (`in_app` + optional `email`) when status becomes
+ *      `ready` or `completed`.
+ *
+ * 3. `onOnlineAppointmentRequested` (Firestore Trigger: `appointments/{appointmentId}`)
+ *    - Alerts the target workshop (`in_app` + optional `email`) when a car owner submits
+ *      a new online appointment request (`status == "requested"`).
  */
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
+import { setGlobalOptions } from "firebase-functions/v2";
+import {
+  onDocumentCreated,
+  onDocumentWritten,
+} from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
 if (getApps().length === 0) {
   initializeApp();
 }
+
+setGlobalOptions({
+  region: "europe-west1",
+  maxInstances: 10,
+});
 
 const MS_PER_DAY = 86_400_000;
 
@@ -39,27 +59,31 @@ async function sendEmailIfConfigured(params: {
   if (!apiKey) {
     return { ok: true, simulated: true };
   }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: [params.to],
-      subject: params.subject,
-      text: params.text,
-    }),
-  });
-  return { ok: res.ok, simulated: false };
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [params.to],
+        subject: params.subject,
+        text: params.text,
+      }),
+    });
+    return { ok: res.ok, simulated: false };
+  } catch (err: unknown) {
+    logger.error("Email dispatch failed", err);
+    return { ok: false, simulated: false };
+  }
 }
 
 export const dailyVeltroxReminderSweep = onSchedule(
   {
     schedule: "every day 07:00",
     timeZone: "Europe/Sofia",
-    region: "europe-west1",
     memory: "256MiB",
   },
   async () => {
@@ -118,8 +142,18 @@ export const dailyVeltroxReminderSweep = onSchedule(
       const kmLeft =
         dueKm !== null && currentKm !== null ? dueKm - currentKm : null;
 
+      const complianceTypes = new Set([
+        "liability_insurance",
+        "vignette",
+        "technical_inspection",
+        "casco",
+        "fire_extinguisher",
+        "vehicle_tax",
+      ]);
+      const leadDays = complianceTypes.has(String(rem.type ?? "")) ? 14 : 7;
+
       const isDue =
-        (daysUntil !== null && daysUntil <= 7) ||
+        (daysUntil !== null && daysUntil <= leadDays) ||
         (kmLeft !== null && kmLeft <= 500);
       if (!isDue) continue;
 
@@ -131,9 +165,11 @@ export const dailyVeltroxReminderSweep = onSchedule(
       if (garageId) {
         const g = garages.get(garageId);
         if (!g || g.status !== "approved") continue;
-        const quota = typeof g.monthlyReminderQuota === "number" ? g.monthlyReminderQuota : 50;
+        const quota =
+          typeof g.monthlyReminderQuota === "number" ? g.monthlyReminderQuota : 50;
         const used =
-          g.quotaResetMonth === monthKey && typeof g.monthlyRemindersUsed === "number"
+          g.quotaResetMonth === monthKey &&
+          typeof g.monthlyRemindersUsed === "number"
             ? g.monthlyRemindersUsed
             : 0;
         if (used >= quota) {
@@ -153,8 +189,14 @@ export const dailyVeltroxReminderSweep = onSchedule(
         });
       }
 
-      const subject = `Veltrox: ${String(rem.title ?? "Service Reminder")}`;
-      const body = `Upcoming vehicle milestone${rem.plateNumber ? ` (${String(rem.plateNumber)})` : ""}: ${String(rem.title ?? "")}.`;
+      const isBg = (owner?.language ?? "bg") === "bg";
+      const plateSuffix = rem.plateNumber ? ` (${String(rem.plateNumber)})` : "";
+      const subject = isBg
+        ? `Напомняне${plateSuffix}: ${String(rem.title ?? "Сервизно обслужване")}`
+        : `Service Reminder${plateSuffix}: ${String(rem.title ?? "Scheduled Service")}`;
+      const body = isBg
+        ? `Предстоящо обслужване${plateSuffix}: ${String(rem.title ?? "")}.`
+        : `Upcoming vehicle milestone${plateSuffix}: ${String(rem.title ?? "")}.`;
 
       await db.collection("notifications").add({
         ownerId,
@@ -173,11 +215,13 @@ export const dailyVeltroxReminderSweep = onSchedule(
         createdAt: nowIso,
       });
 
+      const prefs = (owner?.notificationPreferences ?? {}) as Record<string, unknown>;
+      const allowEmail = prefs.emailReminders !== false;
       const toEmail =
         (typeof rem.recipientEmail === "string" && rem.recipientEmail) ||
         (typeof owner?.email === "string" ? owner.email : null);
 
-      if (toEmail) {
+      if (toEmail && allowEmail) {
         const emailRes = await sendEmailIfConfigured({
           to: toEmail,
           subject,
@@ -227,8 +271,14 @@ export const dailyVeltroxReminderSweep = onSchedule(
       const owner = users.get(ownerId);
       if (!owner || owner.suspended === true) continue;
 
-      const subject = `Expiring Document: ${String(data.title ?? "Document")}`;
-      const body = `${String(data.title ?? "Document")} expires on ${expStr.slice(0, 10)}.`;
+      const prefs = (owner.notificationPreferences ?? {}) as Record<string, unknown>;
+      const isBg = (owner.language ?? "bg") === "bg";
+      const subject = isBg
+        ? `Изтичащ документ: ${String(data.title ?? "Документ")}`
+        : `Expiring Document: ${String(data.title ?? "Document")}`;
+      const body = isBg
+        ? `${String(data.title ?? "Документ")} изтича на ${expStr.slice(0, 10)}.`
+        : `${String(data.title ?? "Document")} expires on ${expStr.slice(0, 10)}.`;
 
       await db.collection("notifications").add({
         ownerId,
@@ -246,6 +296,14 @@ export const dailyVeltroxReminderSweep = onSchedule(
         readAt: null,
         createdAt: nowIso,
       });
+
+      if (prefs.documentExpiryAlerts !== false && typeof owner.email === "string") {
+        await sendEmailIfConfigured({
+          to: owner.email,
+          subject,
+          text: body,
+        });
+      }
 
       deliveredKeys.add(deliveryKey);
       dispatchedDocumentAlerts += 1;
@@ -276,3 +334,143 @@ export const dailyVeltroxReminderSweep = onSchedule(
   }
 );
 
+export const onWorkOrderStatusChanged = onDocumentWritten(
+  "workOrders/{workOrderId}",
+  async (event) => {
+    const db = getFirestore();
+    const beforeData = event.data?.before.data();
+    const afterData = event.data?.after.data();
+
+    if (!afterData && beforeData) {
+      const publicToken = beforeData.publicStatusToken;
+      if (typeof publicToken === "string" && publicToken.length > 0) {
+        await db
+          .collection("workOrderPublicStatus")
+          .doc(publicToken)
+          .delete()
+          .catch(() => null);
+      }
+      return;
+    }
+
+    if (!afterData) return;
+
+    const prevStatus = beforeData?.status;
+    const nextStatus = afterData.status;
+    if (prevStatus === nextStatus) return;
+
+    if (nextStatus !== "ready" && nextStatus !== "completed") return;
+
+    const linkedOwnerId =
+      typeof afterData.linkedOwnerId === "string" ? afterData.linkedOwnerId : null;
+    if (!linkedOwnerId) return;
+
+    const ownerSnap = await db.collection("users").doc(linkedOwnerId).get();
+    if (!ownerSnap.exists) return;
+    const owner = ownerSnap.data() ?? {};
+    if (owner.suspended === true) return;
+
+    const isBg = (owner.language ?? "bg") === "bg";
+    const plate = String(afterData.plateNumber ?? "");
+    const vehicleLabel = String(afterData.vehicleLabel ?? plate);
+    const nowIso = new Date().toISOString();
+
+    const subject =
+      nextStatus === "ready"
+        ? isBg
+          ? `Автомобилът е готов за получаване (${plate})`
+          : `Vehicle Ready for Pickup (${plate})`
+        : isBg
+          ? `Сервизната поръчка е приключена (${plate})`
+          : `Service Work Order Completed (${plate})`;
+
+    const body =
+      nextStatus === "ready"
+        ? isBg
+          ? `${vehicleLabel} (${plate}) е готов за получаване от сервиза.`
+          : `${vehicleLabel} (${plate}) is ready for pickup at the workshop.`
+        : isBg
+          ? `Ремонтът на ${vehicleLabel} (${plate}) е приключен и синхронизиран с Вашия дневник.`
+          : `Service on ${vehicleLabel} (${plate}) is completed and synced to your Car Diary.`;
+
+    const actionUrl =
+      typeof afterData.vehicleId === "string"
+        ? `/app/cars/${afterData.vehicleId}`
+        : "/app/cars";
+
+    await db.collection("notifications").add({
+      ownerId: linkedOwnerId,
+      garageId: typeof afterData.garageId === "string" ? afterData.garageId : null,
+      reminderId: null,
+      documentId: null,
+      actionUrl,
+      channel: "in_app",
+      subject,
+      body,
+      status: "sent",
+      deliveryKey: `wo-status:${event.params.workOrderId}:${String(nextStatus)}`,
+      provider: "cloud-functions-v2",
+      simulated: false,
+      readAt: null,
+      createdAt: nowIso,
+    });
+
+    const prefs = (owner.notificationPreferences ?? {}) as Record<string, unknown>;
+    if (prefs.serviceUpdates !== false && typeof owner.email === "string") {
+      await sendEmailIfConfigured({
+        to: owner.email,
+        subject,
+        text: body,
+      });
+    }
+  }
+);
+
+export const onOnlineAppointmentRequested = onDocumentCreated(
+  "appointments/{appointmentId}",
+  async (event) => {
+    const data = event.data?.data();
+    if (!data || data.status !== "requested") return;
+
+    const garageId = typeof data.garageId === "string" ? data.garageId : null;
+    if (!garageId) return;
+
+    const db = getFirestore();
+    const garageSnap = await db.collection("garages").doc(garageId).get();
+    if (!garageSnap.exists) return;
+    const garage = garageSnap.data() ?? {};
+
+    const plate = String(data.plateNumber ?? "");
+    const customerName = String(data.customerName ?? "");
+    const serviceRequested = String(data.serviceRequested ?? "");
+    const nowIso = new Date().toISOString();
+
+    const subject = `Нова онлайн заявка за час: ${plate}`;
+    const body = `${customerName} (${plate}) заяви час за: ${serviceRequested}.`;
+
+    await db.collection("notifications").add({
+      ownerId: typeof garage.ownerUid === "string" ? garage.ownerUid : null,
+      garageId,
+      reminderId: null,
+      documentId: null,
+      actionUrl: "/garage/appointments",
+      channel: "in_app",
+      subject,
+      body,
+      status: "sent",
+      deliveryKey: `appt-req:${event.params.appointmentId}`,
+      provider: "cloud-functions-v2",
+      simulated: false,
+      readAt: null,
+      createdAt: nowIso,
+    });
+
+    if (typeof garage.email === "string" && garage.email.includes("@")) {
+      await sendEmailIfConfigured({
+        to: garage.email,
+        subject,
+        text: body,
+      });
+    }
+  }
+);

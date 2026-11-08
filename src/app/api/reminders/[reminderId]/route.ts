@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCurrentAuthContext } from "@/lib/auth/server-auth";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { dispatchImmediateReminderAlertIfDue } from "@/lib/notifications/reminder-engine";
 import { reminderPatchSchema } from "@/lib/validators/car-diary";
-import type { Reminder } from "@/types/domain";
+import type { Reminder, Vehicle } from "@/types/domain";
 
 export const runtime = "nodejs";
 
@@ -60,6 +61,8 @@ export async function PATCH(
   const nowIso = new Date().toISOString();
 
   const nextStatus = data.status ?? existing.status;
+  const dueDateChanged =
+    data.dueDate !== undefined && data.dueDate !== existing.dueDate;
   const updated: Reminder = {
     ...existing,
     id: reminderId,
@@ -70,6 +73,14 @@ export async function PATCH(
       data.dueMileageKm !== undefined ? data.dueMileageKm : existing.dueMileageKm,
     notes: data.notes !== undefined ? data.notes : (existing.notes ?? null),
     status: nextStatus,
+    sentAt:
+      nextStatus === "scheduled" || dueDateChanged
+        ? null
+        : (existing.sentAt ?? null),
+    lastError:
+      nextStatus === "scheduled" || dueDateChanged
+        ? null
+        : (existing.lastError ?? null),
     completedAt:
       nextStatus === "completed"
         ? (existing.completedAt ?? nowIso)
@@ -79,7 +90,24 @@ export async function PATCH(
 
   await remRef.set(updated);
 
-  return NextResponse.json({ reminder: updated });
+  let vehicle: Vehicle | null = null;
+  if (updated.vehicleId) {
+    const vehSnap = await admin.adminDb
+      .collection("vehicles")
+      .doc(updated.vehicleId)
+      .get();
+    if (vehSnap.exists) {
+      vehicle = { ...(vehSnap.data() as Vehicle), id: vehSnap.id };
+    }
+  }
+
+  const finalReminder = await dispatchImmediateReminderAlertIfDue({
+    reminder: updated,
+    vehicle,
+    owner: ctx.profile,
+  });
+
+  return NextResponse.json({ reminder: finalReminder });
 }
 
 export async function DELETE(

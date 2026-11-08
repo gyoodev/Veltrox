@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
+import { VehicleComplianceTracker } from "@/components/car-diary/vehicle-compliance-tracker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -170,6 +171,13 @@ export default async function UserDashboardPage() {
         />
       ) : (
         <div className="space-y-8">
+          {/* 6-Item Vehicle Obligations & Expiry Tracker (ГО, Винетка, ГТП, Каско, Пожарогасител, Данък МПС) */}
+          <VehicleComplianceTracker
+            vehicles={bundle.vehicles}
+            initialReminders={bundle.reminders}
+            documents={bundle.documents}
+          />
+
           {/* Vehicles Row */}
           <section className="space-y-4">
             <div className="flex items-center justify-between">

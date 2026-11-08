@@ -19,7 +19,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getFirebaseClient } from "@/lib/firebase/client";
 import { type LoginFormValues, loginSchema } from "@/lib/validators/auth";
 
-function mapFirebaseErrorCode(code: string | undefined): string {
+function mapFirebaseErrorCode(
+  code: string | undefined,
+  message?: string
+): string {
+  if (message === "FIREBASE_ADMIN_NOT_CONFIGURED") {
+    return "adminNotConfigured";
+  }
+  if (message === "ACCOUNT_SUSPENDED") {
+    return "accountSuspended";
+  }
   switch (code) {
     case "auth/invalid-credential":
     case "auth/wrong-password":
@@ -29,6 +38,11 @@ function mapFirebaseErrorCode(code: string | undefined): string {
       return "tooManyRequests";
     case "auth/popup-closed-by-user":
       return "popupClosed";
+    case "auth/operation-not-allowed":
+    case "auth/configuration-not-found":
+      return "providerDisabled";
+    case "auth/unauthorized-domain":
+      return "unauthorizedDomain";
     default:
       return "generic";
   }
@@ -81,11 +95,7 @@ function LoginFormContent() {
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       const message = (err as { message?: string })?.message;
-      if (message === "ACCOUNT_SUSPENDED") {
-        toast.error(t("errors.accountSuspended"));
-        return;
-      }
-      const errKey = mapFirebaseErrorCode(code);
+      const errKey = mapFirebaseErrorCode(code, message);
       toast.error(t(`errors.${errKey}` as Parameters<typeof t>[0]));
     }
   };
@@ -108,7 +118,8 @@ function LoginFormContent() {
       router.refresh();
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
-      const errKey = mapFirebaseErrorCode(code);
+      const message = (err as { message?: string })?.message;
+      const errKey = mapFirebaseErrorCode(code, message);
       toast.error(t(`errors.${errKey}` as Parameters<typeof t>[0]));
     } finally {
       setGoogleLoading(false);

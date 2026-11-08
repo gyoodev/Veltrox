@@ -11,7 +11,15 @@
     "typecheck": "tsc --noEmit",
     "set-admin": "tsx scripts/set-admin.ts",
     "approve-garage": "tsx scripts/approve-garage.ts",
-    "import-admin-key": "node scripts/import-service-account.mjs"
+    "import-admin-key": "node scripts/import-service-account.mjs",
+    "firebase:doctor": "node scripts/firebase-doctor.mjs",
+    "functions:install": "npm --prefix functions install",
+    "functions:build": "npm --prefix functions run build",
+    "firebase:login": "npx -y firebase-tools@13 login",
+    "firebase:emulators": "npx -y firebase-tools@13 emulators:start",
+    "firebase:deploy:rules": "npx -y firebase-tools@13 deploy --only firestore:rules,firestore:indexes,storage",
+    "firebase:deploy:functions": "npx -y firebase-tools@13 deploy --only functions",
+    "firebase:deploy:all": "npx -y firebase-tools@13 deploy --only firestore:rules,firestore:indexes,storage,functions"
   },
   "dependencies": {
     "@hookform/resolvers": "^4.1.3",

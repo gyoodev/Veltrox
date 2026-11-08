@@ -1,8 +1,17 @@
 import { ProfileSettingsView } from "@/components/profile/profile-settings-view";
 import { requireRole } from "@/lib/auth/server-auth";
+import { fetchBulgariaFuelPrices } from "@/lib/fuel-prices";
 
 export default async function UserProfilePage() {
-  const { profile } = await requireRole(["USER"]);
-  return <ProfileSettingsView initialProfile={profile} />;
+  const [{ profile }, fuelPrices] = await Promise.all([
+    requireRole(["USER"]),
+    fetchBulgariaFuelPrices(),
+  ]);
+  return (
+    <ProfileSettingsView
+      initialProfile={profile}
+      initialFuelPrices={fuelPrices}
+    />
+  );
 }
 

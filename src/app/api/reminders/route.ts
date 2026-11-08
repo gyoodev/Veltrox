@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAuthContext } from "@/lib/auth/server-auth";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { dispatchImmediateReminderAlertIfDue } from "@/lib/notifications/reminder-engine";
 import { reminderFormSchema } from "@/lib/validators/car-diary";
 import type { Reminder, Vehicle } from "@/types/domain";
 
@@ -91,6 +92,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     garageId: null,
     vehicleId: data.vehicleId,
     workOrderId: null,
+    plateNumber: vehicle.plateNumber,
     type: data.type,
     title: data.title,
     notes: data.notes && data.notes.trim().length > 0 ? data.notes.trim() : null,
@@ -108,6 +110,12 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   await docRef.set(reminder);
 
-  return NextResponse.json({ reminder }, { status: 201 });
+  const finalReminder = await dispatchImmediateReminderAlertIfDue({
+    reminder,
+    vehicle: { ...vehicle, id: vehicleSnap.id },
+    owner: ctx.profile,
+  });
+
+  return NextResponse.json({ reminder: finalReminder }, { status: 201 });
 }
 

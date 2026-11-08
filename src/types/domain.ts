@@ -347,10 +347,23 @@ export interface TyreSet {
   updatedAt: string;
 }
 
-export const REMINDER_TYPES = [
-  "technical_inspection",
+export const COMPLIANCE_REMINDER_TYPES = [
   "liability_insurance",
   "vignette",
+  "technical_inspection",
+  "casco",
+  "fire_extinguisher",
+  "vehicle_tax",
+] as const;
+export type ComplianceReminderType = (typeof COMPLIANCE_REMINDER_TYPES)[number];
+
+export const REMINDER_TYPES = [
+  "liability_insurance",
+  "vignette",
+  "technical_inspection",
+  "casco",
+  "fire_extinguisher",
+  "vehicle_tax",
   "oil_change",
   "seasonal_tyres",
   "custom_service",
@@ -404,9 +417,12 @@ export interface Appointment {
 
 export const DOCUMENT_TYPES = [
   "insurance",
-  "registration",
+  "casco",
   "vignette",
   "inspection",
+  "fire_extinguisher",
+  "vehicle_tax",
+  "registration",
   "invoice",
   "other",
 ] as const;

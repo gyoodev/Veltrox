@@ -1,7 +1,20 @@
 import { type FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
-import { type Auth, GoogleAuthProvider, getAuth } from "firebase/auth";
-import { type Firestore, getFirestore } from "firebase/firestore";
-import { type FirebaseStorage, getStorage } from "firebase/storage";
+import {
+  type Auth,
+  connectAuthEmulator,
+  GoogleAuthProvider,
+  getAuth,
+} from "firebase/auth";
+import {
+  connectFirestoreEmulator,
+  type Firestore,
+  getFirestore,
+} from "firebase/firestore";
+import {
+  connectStorageEmulator,
+  type FirebaseStorage,
+  getStorage,
+} from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "",
@@ -35,6 +48,7 @@ export interface FirebaseClientServices {
 }
 
 let cachedServices: FirebaseClientServices | null = null;
+let emulatorsConnected = false;
 
 export function getFirebaseClient(): FirebaseClientServices | null {
   if (!isFirebaseClientConfigured) {
@@ -51,6 +65,22 @@ export function getFirebaseClient(): FirebaseClientServices | null {
   const googleProvider = new GoogleAuthProvider();
   googleProvider.setCustomParameters({ prompt: "select_account" });
 
+  if (
+    process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true" &&
+    !emulatorsConnected
+  ) {
+    try {
+      connectAuthEmulator(auth, "http://127.0.0.1:9099", {
+        disableWarnings: true,
+      });
+      connectFirestoreEmulator(db, "127.0.0.1", 8080);
+      connectStorageEmulator(storage, "127.0.0.1", 9199);
+      emulatorsConnected = true;
+    } catch {
+      // Ignore duplicate emulator bind during HMR
+    }
+  }
+
   cachedServices = { app, auth, db, storage, googleProvider };
   return cachedServices;
 }
@@ -64,7 +94,8 @@ export async function syncFirebaseAnalyticsConsent(
 ): Promise<void> {
   if (
     typeof window === "undefined" ||
-    !process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    !process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID ||
+    process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true"
   ) {
     return;
   }

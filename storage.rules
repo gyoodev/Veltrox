@@ -44,7 +44,22 @@ service firebase.storage {
       allow delete: if (isSignedIn() && request.auth.uid == ownerId) || isAdmin();
     }
 
-    // Garage branding & work order drop-off photos
+    // Publicly readable workshop logos for the Garage Directory (/garages)
+    match /garages/{garageId}/logo/{fileName} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+        && request.auth.token.role == 'GARAGE_OWNER'
+        && request.auth.token.garageStatus == 'approved'
+        && request.auth.token.garageId == garageId
+        && isImageUnder5MB();
+      allow delete: if (
+        isSignedIn()
+        && request.auth.token.role == 'GARAGE_OWNER'
+        && request.auth.token.garageId == garageId
+      ) || isAdmin();
+    }
+
+    // Garage work order drop-off photos & internal attachments
     match /garages/{garageId}/{allPaths=**} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn()

@@ -3,22 +3,33 @@
  * into `.env.local` (which is Git-ignored) with proper newline escaping.
  *
  * Usage:
+ *   # Option A: Drop `serviceAccountKey.json` (or `*-firebase-adminsdk-*.json`) into project root and run:
+ *   npm run import-admin-key
+ *
+ *   # Option B: Pass explicit file path:
  *   npm run import-admin-key -- "C:\Users\You\Downloads\veltrox-gkdev-firebase-adminsdk-xxxx.json"
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const jsonArg = process.argv[2];
-if (!jsonArg) {
-  console.error(
-    'Usage: npm run import-admin-key -- "<path-to-firebase-adminsdk.json>"'
+function findDefaultJsonInRoot() {
+  const cwd = process.cwd();
+  const files = readdirSync(cwd);
+  const candidate = files.find(
+    (name) =>
+      name === "serviceAccountKey.json" ||
+      (name.includes("firebase-adminsdk") && name.endsWith(".json"))
   );
-  process.exit(1);
+  return candidate ? resolve(cwd, candidate) : null;
 }
 
-const jsonPath = resolve(process.cwd(), jsonArg);
-if (!existsSync(jsonPath)) {
-  console.error(`File not found: ${jsonPath}`);
+const jsonArg = process.argv[2]?.trim();
+const jsonPath = jsonArg ? resolve(process.cwd(), jsonArg) : findDefaultJsonInRoot();
+
+if (!jsonPath || !existsSync(jsonPath)) {
+  console.error(
+    'Не е намерен Service Account JSON файл.\nПоставете файла като "serviceAccountKey.json" в главната папка на проекта или изпълнете:\n  npm run import-admin-key -- "<път-до-firebase-adminsdk.json>"'
+  );
   process.exit(1);
 }
 
@@ -60,6 +71,5 @@ envContent = upsertEnvVar(
 
 writeFileSync(envLocalPath, envContent, "utf8");
 console.log(
-  `Updated .env.local with Admin SDK credentials for ${parsed.client_email} (${parsed.project_id}).`
+  `Успешно импортиран Firebase Admin ключ в .env.local за ${parsed.client_email} (${parsed.project_id}).`
 );
-

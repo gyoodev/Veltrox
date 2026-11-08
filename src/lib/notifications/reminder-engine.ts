@@ -162,11 +162,17 @@ export async function runScheduledReminderSweep(options?: {
       actionUrl,
     });
 
+    const cycleSuffix =
+      reminder.dueDate ??
+      (reminder.dueMileageKm !== null && reminder.dueMileageKm !== undefined
+        ? String(reminder.dueMileageKm)
+        : "once");
+
     const summary = await dispatchMultiChannelNotification({
       ownerId: reminder.ownerId,
       garageId: reminder.garageId,
       reminderId: reminder.id,
-      deliveryKey: `reminder:${reminder.id}`,
+      deliveryKey: `reminder:${reminder.id}:${cycleSuffix}`,
       channels,
       createInAppRecord: true,
       consumeGarageQuota: Boolean(reminder.garageId),
@@ -301,5 +307,110 @@ export async function runScheduledReminderSweep(options?: {
     dispatchedDocumentAlerts,
     executedAt: nowIso,
   };
+}
+
+/**
+ * Evaluates a newly created or renewed user reminder immediately upon save.
+ * If the expiry date is already within the alert window (<= 14 days for compliance
+ * obligations such as Liability Insurance, Vignette, GTP, Casco, Fire Extinguisher,
+ * and Vehicle Tax; <= 7 days or <= 500 km for service reminders), dispatches an
+ * immediate In-App Bell + Email notification without waiting for tomorrow's cron.
+ */
+export async function dispatchImmediateReminderAlertIfDue(params: {
+  reminder: Reminder;
+  vehicle: Vehicle | null;
+  owner: UserProfile;
+}): Promise<Reminder> {
+  const { reminder, vehicle, owner } = params;
+  const admin = getFirebaseAdmin();
+  if (!admin || owner.suspended || reminder.status !== "scheduled") {
+    return reminder;
+  }
+
+  const evalState = evaluateReminderDueState(
+    reminder,
+    vehicle?.currentMileageKm ?? null
+  );
+  if (!evalState.shouldSend) {
+    return reminder;
+  }
+
+  const cycleSuffix =
+    reminder.dueDate ??
+    (reminder.dueMileageKm !== null && reminder.dueMileageKm !== undefined
+      ? String(reminder.dueMileageKm)
+      : "once");
+  const deliveryKey = `reminder:${reminder.id}:${cycleSuffix}`;
+
+  // Avoid duplicate dispatch if already notified for this exact due date / mileage cycle
+  const existingSnap = await admin.adminDb
+    .collection("notifications")
+    .where("ownerId", "==", owner.uid)
+    .get();
+  const alreadyDelivered = existingSnap.docs.some(
+    (d) => (d.data() as AppNotification).deliveryKey === deliveryKey
+  );
+  if (alreadyDelivered) {
+    return reminder;
+  }
+
+  const locale: AppLocale = owner.language ?? "bg";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const channels = resolveEffectiveChannels({
+    requestedChannels: reminder.channels,
+    preferences: owner.notificationPreferences,
+    category: "reminder",
+  });
+
+  const content = buildReminderTemplate({
+    locale,
+    recipientName: owner.displayName,
+    title: reminder.title,
+    type: reminder.type,
+    plateNumber: vehicle?.plateNumber ?? reminder.plateNumber ?? null,
+    dueDate: reminder.dueDate,
+    dueMileageKm: reminder.dueMileageKm,
+    garageName: null,
+    actionUrl: `${appUrl}/app/reminders`,
+  });
+
+  const summary = await dispatchMultiChannelNotification({
+    ownerId: owner.uid,
+    garageId: null,
+    reminderId: reminder.id,
+    deliveryKey,
+    channels,
+    createInAppRecord: true,
+    consumeGarageQuota: false,
+    payload: {
+      toEmail: owner.email,
+      toPhone: owner.phone,
+      recipientName: owner.displayName,
+      locale,
+      subject: content.subject,
+      textBody: content.textBody,
+      htmlBody: content.htmlBody,
+      actionUrl: "/app/reminders",
+    },
+  });
+
+  if (!summary.ok) {
+    return reminder;
+  }
+
+  const nowIso = new Date().toISOString();
+  const sentReminder: Reminder = {
+    ...reminder,
+    status: "sent",
+    sentAt: nowIso,
+    lastError: null,
+    updatedAt: nowIso,
+  };
+  await admin.adminDb
+    .collection("reminders")
+    .doc(reminder.id)
+    .set(sentReminder, { merge: true });
+
+  return sentReminder;
 }
 
