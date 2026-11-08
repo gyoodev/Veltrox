@@ -229,6 +229,10 @@ export function VehicleComplianceTracker({
   const [rtaError, setRtaError] = useState<string | null>(null);
   const [checkDueDateInput, setCheckDueDateInput] = useState<string>("");
   const [checkNotesInput, setCheckNotesInput] = useState<string>("");
+  // Globi Insurance States:
+  const [globiViewTab, setGlobiViewTab] = useState<"embedded" | "sync">("embedded");
+  const [globiIframeKey, setGlobiIframeKey] = useState<number>(0);
+  const [globiSmartPaste, setGlobiSmartPaste] = useState<string>("");
 
   const activeVehicle = useMemo(
     () =>
@@ -418,6 +422,55 @@ export function VehicleComplianceTracker({
     }
   };
 
+  const handleSmartPasteExtract = (text: string) => {
+    setGlobiSmartPaste(text);
+    if (!text.trim()) return;
+
+    let foundDate: string | null = null;
+    const endMatch = text.match(
+      /(?:крайна\s*дата|валидна\s*до|valid\s*until|expiry)[\s\S]{0,30}?(\d{1,2})[./-](\d{1,2})[./-](\d{4})/i
+    );
+    if (endMatch && endMatch[1] && endMatch[2] && endMatch[3]) {
+      const d = endMatch[1].padStart(2, "0");
+      const m = endMatch[2].padStart(2, "0");
+      const y = endMatch[3];
+      foundDate = `${y}-${m}-${d}`;
+    } else {
+      const allDates = [...text.matchAll(/\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b/g)];
+      const last = allDates[allDates.length - 1];
+      if (last && last[1] && last[2] && last[3]) {
+        const d = last[1].padStart(2, "0");
+        const m = last[2].padStart(2, "0");
+        const y = last[3];
+        foundDate = `${y}-${m}-${d}`;
+      }
+    }
+
+    let foundInsurer: string | null = null;
+    for (const ins of POPULAR_INSURERS) {
+      if (new RegExp(ins, "i").test(text)) {
+        foundInsurer = ins;
+        break;
+      }
+    }
+
+    if (foundDate) {
+      setCheckDueDateInput(foundDate);
+    }
+    if (foundInsurer) {
+      setCheckNotesInput((prev) => {
+        const trimmed = prev.trim();
+        if (!trimmed) return `${foundInsurer} полица ГО`;
+        if (trimmed.includes(foundInsurer)) return trimmed;
+        return `${foundInsurer} - ${trimmed}`;
+      });
+    }
+
+    if (foundDate || foundInsurer) {
+      toast.success(t("globiParsedToast"));
+    }
+  };
+
   const handleOpenCheckModal = async (slotType: ComplianceReminderType) => {
     setCheckingSlot(slotType);
     setCheckModalOpen(true);
@@ -456,6 +509,10 @@ export function VehicleComplianceTracker({
       } finally {
         setCheckingLoading(false);
       }
+    } else if (slotType === "liability_insurance") {
+      setGlobiViewTab("embedded");
+      setGlobiSmartPaste("");
+      void copyToClipboard(activeVehicle.plateNumber, t("globiCopiedToast"));
     } else if (slotType === "technical_inspection") {
       void loadRtaCaptcha();
     }
@@ -951,7 +1008,12 @@ export function VehicleComplianceTracker({
 
       {/* Automatic Registry Check & Add Modal */}
       <Dialog open={checkModalOpen} onOpenChange={setCheckModalOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto overscroll-contain p-4 sm:p-6">
+        <DialogContent
+          className={cn(
+            "max-h-[92dvh] overflow-y-auto overscroll-contain p-4 sm:p-6 transition-all",
+            checkingSlot === "liability_insurance" ? "sm:max-w-3xl" : "sm:max-w-lg"
+          )}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {checkingSlot === "vignette" ? (
@@ -1116,210 +1178,421 @@ export function VehicleComplianceTracker({
               )
             ) : null}
 
-            {/* Liability Insurance (Globi.bg & Guarantee Fund) */}
+            {/* Liability Insurance (Integrated Globi.bg Check & Syncer) */}
             {checkingSlot === "liability_insurance" ? (
               <div className="space-y-4">
-                {/* Globi.bg Check Banner */}
-                <div className="rounded-2xl border border-sky-500/35 bg-sky-500/[0.08] p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400">
-                        <ShieldCheck className="h-4 w-4" />
-                      </div>
-                      <span className="font-semibold text-sm text-foreground">
-                        Globi.bg • {t("items.liability_insurance")}
-                      </span>
-                    </div>
-                    <Badge
-                      variant="outline"
-                      className="shrink-0 text-[10px] font-mono border-sky-500/30 text-sky-400 bg-sky-500/10"
-                    >
-                      globi.bg/tools
-                    </Badge>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {t("globiCheckDesc")}
-                  </p>
-
-                  {/* Plates & 1-click CTA */}
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs gap-1.5 font-mono border-sky-500/40 hover:bg-sky-500/15"
-                      onClick={() =>
-                        copyToClipboard(
-                          activeVehicle.plateNumber,
-                          t("globiCopiedToast")
-                        )
-                      }
-                      title={t("copyPlate")}
-                    >
-                      <Copy className="h-3 w-3" />
-                      <span>{activeVehicle.plateNumber}</span>
-                    </Button>
-
-                    {activeVehicle.vin ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs gap-1.5 font-mono"
-                        onClick={() =>
-                          copyToClipboard(
-                            activeVehicle.vin || "",
-                            t("copiedToast")
-                          )
-                        }
-                      >
-                        <Copy className="h-3 w-3" />
-                        <span>VIN: {activeVehicle.vin}</span>
-                      </Button>
+                {/* Segmented View Switcher */}
+                <div className="flex items-center gap-1.5 p-1 rounded-xl bg-secondary/50 border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setGlobiViewTab("embedded")}
+                    className={cn(
+                      "flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5",
+                      globiViewTab === "embedded"
+                        ? "bg-background text-foreground shadow-sm border border-border/60"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Search className="h-3.5 w-3.5 text-sky-400" />
+                    <span>{t("globiTabEmbedded")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGlobiViewTab("sync")}
+                    className={cn(
+                      "flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5",
+                      globiViewTab === "sync"
+                        ? "bg-background text-foreground shadow-sm border border-border/60"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                    <span>{t("globiTabSync")}</span>
+                    {checkDueDateInput ? (
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 ml-1" />
                     ) : null}
-
-                    <Button
-                      type="button"
-                      variant="gradient"
-                      size="sm"
-                      className="h-8 text-xs gap-1.5 ml-auto font-medium shadow-sm"
-                      onClick={() => {
-                        void copyToClipboard(
-                          activeVehicle.plateNumber,
-                          t("globiCopiedToast")
-                        );
-                        window.open(
-                          "https://globi.bg/tools/motor-insurance",
-                          "_blank",
-                          "noopener,noreferrer"
-                        );
-                      }}
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      <span>{t("openGlobiPortal")}</span>
-                    </Button>
-                  </div>
-
-                  {/* Secondary Guarantee Fund Link */}
-                  <div className="flex items-center justify-end pt-1 border-t border-sky-500/20">
-                    <a
-                      href="https://www.guaranteefund.org/bg/ez-spravki/proverka-za-grazhdanska-otgovornost"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-sky-300 transition-colors"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      <span>{t("openGfSecondary")}</span>
-                    </a>
-                  </div>
+                  </button>
                 </div>
 
-                {/* Step-by-Step Helper */}
-                <div className="rounded-xl border border-border/60 bg-secondary/20 p-3 text-xs space-y-1.5">
-                  <div className="font-semibold text-foreground text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Как се прави проверката:
-                  </div>
-                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-[11px]">
-                    <li>{t("globiStep1")}</li>
-                    <li>{t("globiStep2")}</li>
-                    <li>{t("globiStep3")}</li>
-                  </ol>
-                </div>
-
-                {/* Expiry Date with Presets */}
-                <div className="space-y-2 pt-1">
-                  <Label htmlFor="check-date-gf">{t("expiryDateLabel")}</Label>
-                  <Input
-                    id="check-date-gf"
-                    type="date"
-                    value={checkDueDateInput}
-                    onChange={(e) => setCheckDueDateInput(e.target.value)}
-                    className="font-mono"
-                  />
-                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                    <span className="text-[11px] text-muted-foreground">
-                      {t("quickAddLabel")}:
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 font-mono text-[11px]"
-                      onClick={() =>
-                        setCheckDueDateInput(
-                          addMonthsIso(checkDueDateInput, 3)
-                        )
-                      }
-                    >
-                      {t("preset3m")} (вноска)
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 font-mono text-[11px]"
-                      onClick={() =>
-                        setCheckDueDateInput(
-                          addMonthsIso(checkDueDateInput, 6)
-                        )
-                      }
-                    >
-                      +6 мес.
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2 font-mono text-[11px]"
-                      onClick={() =>
-                        setCheckDueDateInput(
-                          addMonthsIso(checkDueDateInput, 12)
-                        )
-                      }
-                    >
-                      {t("preset1y")}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Popular Insurers Quick Chips */}
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-medium text-muted-foreground">
-                    {t("popularInsurers")}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {POPULAR_INSURERS.map((ins) => (
-                      <button
-                        key={ins}
-                        type="button"
-                        onClick={() => {
-                          const current = checkNotesInput.trim();
-                          if (!current) {
-                            setCheckNotesInput(`${ins} полица`);
-                          } else if (!current.includes(ins)) {
-                            setCheckNotesInput(`${ins} - ${current}`);
+                {/* Tab 1: Embedded In-App Globi Tool */}
+                {globiViewTab === "embedded" ? (
+                  <div className="space-y-3">
+                    {/* Live Toolbar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-500/30 bg-sky-500/[0.07] px-3 py-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-medium hidden sm:inline">
+                          Автомобил:
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs font-mono font-bold border-sky-500/40 bg-background/80 hover:bg-sky-500/20"
+                          onClick={() =>
+                            copyToClipboard(
+                              activeVehicle.plateNumber,
+                              t("globiCopiedToast")
+                            )
                           }
-                        }}
-                        className="rounded-lg border border-border bg-secondary/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300"
-                      >
-                        {ins}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                          title={t("copyPlate")}
+                        >
+                          <Copy className="h-3 w-3 mr-1 text-sky-400" />
+                          <span>{activeVehicle.plateNumber}</span>
+                        </Button>
+                        <span className="text-[11px] text-muted-foreground">
+                          {t("globiPlateCopiedPrompt", {
+                            plate: activeVehicle.plateNumber,
+                          })}
+                        </span>
+                      </div>
 
-                {/* Notes Input */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="check-notes-gf">{t("notesLabel")}</Label>
-                  <Input
-                    id="check-notes-gf"
-                    value={checkNotesInput}
-                    onChange={(e) => setCheckNotesInput(e.target.value)}
-                    placeholder="напр. ДЗИ полица № 123456789, вноска 2/4"
-                    maxLength={240}
-                  />
-                </div>
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                          onClick={() => setGlobiIframeKey((k) => k + 1)}
+                          title={t("globiReloadFrame")}
+                        >
+                          <RotateCw className="h-3 w-3" />
+                          <span className="hidden sm:inline">
+                            {t("globiReloadFrame")}
+                          </span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          asChild
+                          className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                        >
+                          <a
+                            href="https://globi.bg/tools/motor-insurance"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={t("globiOpenNewTab")}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            <span className="hidden sm:inline">
+                              {t("globiOpenNewTab")}
+                            </span>
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Interactive In-App Iframe */}
+                    <div className="relative rounded-2xl border border-border bg-background overflow-hidden shadow-inner">
+                      <iframe
+                        key={globiIframeKey}
+                        src="https://globi.bg/tools/motor-insurance"
+                        className="w-full h-[460px] sm:h-[500px] border-0"
+                        title="Globi Motor Insurance Tool"
+                        sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                      />
+                    </div>
+
+                    {/* Quick Result Dock beneath the tool */}
+                    <div className="rounded-2xl border border-border bg-secondary/30 p-3.5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                          <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                          <span>{t("globiSmartPasteLabel")}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setGlobiViewTab("sync")}
+                          className="text-[11px] font-medium text-sky-400 hover:text-sky-300"
+                        >
+                          Пълен преглед →
+                        </button>
+                      </div>
+
+                      <Input
+                        value={globiSmartPaste}
+                        onChange={(e) => handleSmartPasteExtract(e.target.value)}
+                        placeholder={t("globiSmartPastePlaceholder")}
+                        className="h-8 text-xs font-mono"
+                      />
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/50">
+                        {/* Quick Insurers */}
+                        <div className="flex flex-wrap items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground mr-1">
+                            Застраховател:
+                          </span>
+                          {POPULAR_INSURERS.slice(0, 6).map((ins) => (
+                            <button
+                              key={ins}
+                              type="button"
+                              onClick={() => {
+                                const current = checkNotesInput.trim();
+                                if (!current) {
+                                  setCheckNotesInput(`${ins} полица ГО`);
+                                } else if (!current.includes(ins)) {
+                                  setCheckNotesInput(`${ins} - ${current}`);
+                                }
+                              }}
+                              className={cn(
+                                "rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition",
+                                checkNotesInput.includes(ins)
+                                  ? "border-sky-500 bg-sky-500/20 text-sky-300 font-bold"
+                                  : "border-border bg-background/60 text-muted-foreground hover:border-sky-500/40 hover:text-sky-300"
+                              )}
+                            >
+                              {ins}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="flex items-center gap-1 ml-auto">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 font-mono text-[10px]"
+                            onClick={() =>
+                              setCheckDueDateInput(
+                                addMonthsIso(checkDueDateInput, 3)
+                              )
+                            }
+                          >
+                            +3м
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 font-mono text-[10px]"
+                            onClick={() =>
+                              setCheckDueDateInput(
+                                addMonthsIso(checkDueDateInput, 6)
+                              )
+                            }
+                          >
+                            +6м
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 font-mono text-[10px]"
+                            onClick={() =>
+                              setCheckDueDateInput(
+                                addMonthsIso(checkDueDateInput, 12)
+                              )
+                            }
+                          >
+                            +1г
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Tab 2: Result & Save Detailed View */
+                  <div className="space-y-4">
+                    {/* Live Policy Preview Card */}
+                    <div className="rounded-2xl border border-sky-500/35 bg-sky-500/[0.08] p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="h-5 w-5 text-sky-400" />
+                          <div>
+                            <h4 className="text-sm font-bold text-foreground">
+                              {checkDueDateInput
+                                ? computeDaysUntil(checkDueDateInput) !== null &&
+                                  (computeDaysUntil(checkDueDateInput) as number) < 0
+                                  ? t("globiStatusExpired")
+                                  : computeDaysUntil(checkDueDateInput) !== null &&
+                                      (computeDaysUntil(checkDueDateInput) as number) <= 30
+                                    ? t("globiStatusExpiring")
+                                    : t("globiStatusActive")
+                                : t("items.liability_insurance")}
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                              {checkNotesInput || "Гражданска отговорност"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <Badge
+                          variant={
+                            checkDueDateInput &&
+                            computeDaysUntil(checkDueDateInput) !== null &&
+                            (computeDaysUntil(checkDueDateInput) as number) < 0
+                              ? "destructive"
+                              : checkDueDateInput &&
+                                  computeDaysUntil(checkDueDateInput) !== null &&
+                                  (computeDaysUntil(checkDueDateInput) as number) <= 30
+                                ? "warning"
+                                : "success"
+                          }
+                          className="font-mono"
+                        >
+                          {activeVehicle.plateNumber}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                        <div className="rounded-xl bg-background/60 p-2.5">
+                          <span className="text-muted-foreground block text-[11px]">
+                            {t("expiryDateLabel")}
+                          </span>
+                          <span className="font-mono font-bold text-foreground text-sm">
+                            {checkDueDateInput
+                              ? formatDate(checkDueDateInput, locale)
+                              : "-"}
+                          </span>
+                        </div>
+                        <div className="rounded-xl bg-background/60 p-2.5">
+                          <span className="text-muted-foreground block text-[11px]">
+                            Оставащо време
+                          </span>
+                          <span className="font-semibold text-foreground truncate block">
+                            {checkDueDateInput &&
+                            computeDaysUntil(checkDueDateInput) !== null
+                              ? (computeDaysUntil(checkDueDateInput) as number) < 0
+                                ? `${Math.abs(
+                                    computeDaysUntil(checkDueDateInput) as number
+                                  )} дни просрочие`
+                                : `${computeDaysUntil(
+                                    checkDueDateInput
+                                  )} дни до падеж`
+                              : "Въведете крайна дата"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground pt-1 border-t border-sky-500/20">
+                        <BellRing className="h-3 w-3 text-sky-400" />
+                        <span>{t("autoAlertDesc")}</span>
+                      </div>
+                    </div>
+
+                    {/* Smart Paste / Extractor Input */}
+                    <div className="rounded-xl border border-border/80 bg-secondary/30 p-3 space-y-1.5">
+                      <Label
+                        htmlFor="globi-smart-paste-input"
+                        className="text-xs font-semibold flex items-center gap-1.5"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                        <span>{t("globiSmartPasteLabel")}</span>
+                      </Label>
+                      <Input
+                        id="globi-smart-paste-input"
+                        value={globiSmartPaste}
+                        onChange={(e) =>
+                          handleSmartPasteExtract(e.target.value)
+                        }
+                        placeholder={t("globiSmartPastePlaceholder")}
+                        className="h-9 text-xs font-mono"
+                      />
+                    </div>
+
+                    {/* Expiry Date with Presets */}
+                    <div className="space-y-2">
+                      <Label htmlFor="check-date-gf">
+                        {t("expiryDateLabel")}
+                      </Label>
+                      <Input
+                        id="check-date-gf"
+                        type="date"
+                        value={checkDueDateInput}
+                        onChange={(e) => setCheckDueDateInput(e.target.value)}
+                        className="font-mono"
+                      />
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-[11px] text-muted-foreground">
+                          {t("quickAddLabel")}:
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 font-mono text-[11px]"
+                          onClick={() =>
+                            setCheckDueDateInput(
+                              addMonthsIso(checkDueDateInput, 3)
+                            )
+                          }
+                        >
+                          {t("preset3m")} (вноска)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 font-mono text-[11px]"
+                          onClick={() =>
+                            setCheckDueDateInput(
+                              addMonthsIso(checkDueDateInput, 6)
+                            )
+                          }
+                        >
+                          +6 мес.
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 font-mono text-[11px]"
+                          onClick={() =>
+                            setCheckDueDateInput(
+                              addMonthsIso(checkDueDateInput, 12)
+                            )
+                          }
+                        >
+                          {t("preset1y")}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Popular Insurers Quick Chips */}
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        {t("popularInsurers")}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {POPULAR_INSURERS.map((ins) => (
+                          <button
+                            key={ins}
+                            type="button"
+                            onClick={() => {
+                              const current = checkNotesInput.trim();
+                              if (!current) {
+                                setCheckNotesInput(`${ins} полица ГО`);
+                              } else if (!current.includes(ins)) {
+                                setCheckNotesInput(`${ins} - ${current}`);
+                              }
+                            }}
+                            className={cn(
+                              "rounded-lg border px-2 py-0.5 text-[11px] font-medium transition",
+                              checkNotesInput.includes(ins)
+                                ? "border-sky-500 bg-sky-500/20 text-sky-300 font-bold"
+                                : "border-border bg-secondary/50 text-muted-foreground hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300"
+                            )}
+                          >
+                            {ins}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Notes Input */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="check-notes-gf">{t("notesLabel")}</Label>
+                      <Input
+                        id="check-notes-gf"
+                        value={checkNotesInput}
+                        onChange={(e) => setCheckNotesInput(e.target.value)}
+                        placeholder="напр. ДЗИ полица № 123456789, вноска 2/4"
+                        maxLength={240}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
 
