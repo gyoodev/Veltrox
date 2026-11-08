@@ -4,9 +4,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { Camera, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { CarSelectCombobox } from "@/components/car-diary/car-select-combobox";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getAllCarMakes, getModelsForMake, POPULAR_MAKES } from "@/lib/car-data";
 import { getFirebaseClient } from "@/lib/firebase/client";
 import {
   type VehicleFormValues,
@@ -95,6 +97,28 @@ export function VehicleFormDialog({
   }, [editingVehicle, form, open]);
 
   const photoPreview = form.watch("photoUrl");
+  const currentMake = form.watch("make");
+
+  const allMakes = useMemo(() => getAllCarMakes(), []);
+
+  const makeGroups = useMemo(
+    () => [
+      {
+        title: t("popularMakesGroup"),
+        items: POPULAR_MAKES,
+      },
+      {
+        title: t("allMakesGroup"),
+        items: allMakes,
+      },
+    ],
+    [allMakes, t]
+  );
+
+  const availableModels = useMemo(() => {
+    if (!currentMake) return [];
+    return getModelsForMake(currentMake);
+  }, [currentMake]);
 
   const translateErr = (key: string | undefined): string | null => {
     if (!key) return null;
@@ -187,33 +211,84 @@ export function VehicleFormDialog({
           noValidate
         >
           <div className="grid gap-3.5 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="veh-make">{t("make")}</Label>
-              <Input
-                id="veh-make"
-                placeholder={t("makePlaceholder")}
-                {...form.register("make")}
-              />
-              {form.formState.errors.make ? (
-                <p className="text-xs text-destructive">
-                  {translateErr(form.formState.errors.make.message)}
-                </p>
-              ) : null}
-            </div>
+            <Controller
+              control={form.control}
+              name="make"
+              render={({ field }) => (
+                <CarSelectCombobox
+                  id="veh-make"
+                  label={t("make")}
+                  value={field.value ?? ""}
+                  onChange={(val) => {
+                    field.onChange(val);
+                    // If current model does not exist in new make's catalog, clear it
+                    const newModels = getModelsForMake(val);
+                    const currentModel = form.getValues("model");
+                    if (
+                      newModels.length > 0 &&
+                      currentModel &&
+                      !newModels.some(
+                        (m) => m.toLowerCase() === currentModel.toLowerCase()
+                      )
+                    ) {
+                      form.setValue("model", "", { shouldValidate: true });
+                    }
+                  }}
+                  placeholder={t("selectMakePrompt")}
+                  searchPlaceholder={t("searchMakePlaceholder")}
+                  groups={makeGroups}
+                  otherOptionLabel={t("otherMakeOption")}
+                  customInputLabel={t("customMakeLabel")}
+                  customInputPlaceholder={t("customMakePlaceholder")}
+                  formatCustomPrompt={(q) => t("useCustomMake", { query: q })}
+                  noResultsText={t("noMakesFound")}
+                  badgeText={`${allMakes.length} марки`}
+                  error={translateErr(form.formState.errors.make?.message)}
+                />
+              )}
+            />
 
-            <div className="space-y-1.5">
-              <Label htmlFor="veh-model">{t("model")}</Label>
-              <Input
-                id="veh-model"
-                placeholder={t("modelPlaceholder")}
-                {...form.register("model")}
-              />
-              {form.formState.errors.model ? (
-                <p className="text-xs text-destructive">
-                  {translateErr(form.formState.errors.model.message)}
-                </p>
-              ) : null}
-            </div>
+            <Controller
+              control={form.control}
+              name="model"
+              render={({ field }) => {
+                const isMakeSelected = Boolean(
+                  currentMake && currentMake.trim().length > 0
+                );
+                const hasCatalogModels = availableModels.length > 0;
+
+                return (
+                  <CarSelectCombobox
+                    id="veh-model"
+                    label={t("model")}
+                    value={field.value ?? ""}
+                    onChange={(val) => field.onChange(val)}
+                    disabled={!isMakeSelected}
+                    disabledReason={t("selectMakeFirst")}
+                    placeholder={
+                      isMakeSelected
+                        ? t("selectModelPrompt")
+                        : t("selectMakeFirst")
+                    }
+                    searchPlaceholder={t("searchModelPlaceholder")}
+                    items={hasCatalogModels ? availableModels : undefined}
+                    otherOptionLabel={t("otherModelOption")}
+                    customInputLabel={t("customModelLabel")}
+                    customInputPlaceholder={t("customModelPlaceholder")}
+                    formatCustomPrompt={(q) => t("useCustomModel", { query: q })}
+                    noResultsText={t("noModelsFound")}
+                    badgeText={
+                      hasCatalogModels
+                        ? t("modelsAvailable", {
+                            count: availableModels.length,
+                          })
+                        : undefined
+                    }
+                    error={translateErr(form.formState.errors.model?.message)}
+                  />
+                );
+              }}
+            />
           </div>
 
           <div className="grid gap-3.5 sm:grid-cols-2">
