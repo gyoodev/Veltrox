@@ -638,6 +638,7 @@
       "vehiclePhoto": "Снимка на автомобила (по избор)",
       "uploadPhoto": "Качи снимка",
       "uploadingPhoto": "Качване...",
+      "photoUploadedToast": "Снимката е качена успешно.",
       "removePhoto": "Премахни снимка",
       "openVehicle": "Отвори дневника",
       "exportPdf": "Експорт сервизна книжка (PDF)",

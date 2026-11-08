@@ -104,6 +104,10 @@ dist
 # https://nextjs.org/blog/next-9-1#public-directory-support
 # public
 
+# User uploaded media in public directory
+public/uploads/cars/*
+!public/uploads/cars/.gitkeep
+
 # vuepress build output
 .vuepress/dist
 

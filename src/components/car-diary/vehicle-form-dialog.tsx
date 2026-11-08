@@ -142,29 +142,58 @@ export function VehicleFormDialog({
       return;
     }
 
-    const client = getFirebaseClient();
-    if (!client) return;
-
     setUploadingPhoto(true);
     try {
-      const ext =
-        file.name
-          .split(".")
-          .pop()
-          ?.replace(/[^a-zA-Z0-9]/g, "") || "webp";
-      const folderSegment = editingVehicle?.id ?? "cover";
-      const storagePath = `vehicles/${ownerUid}/${folderSegment}/photo-${Date.now()}.${ext}`;
-      const storageRef = ref(client.storage, storagePath);
+      // 1. Upload directly to public folder (public/uploads/cars)
+      const formData = new FormData();
+      formData.append("file", file);
 
-      await uploadBytes(storageRef, file, {
-        contentType: file.type,
-        cacheControl: "public,max-age=86400",
+      const res = await fetch("/api/vehicles/upload-photo", {
+        method: "POST",
+        body: formData,
       });
-      const url = await getDownloadURL(storageRef);
 
-      form.setValue("photoUrl", url, { shouldDirty: true });
-      form.setValue("photoStoragePath", storagePath, { shouldDirty: true });
-    } catch {
+      if (res.ok) {
+        const json = (await res.json()) as {
+          ok: boolean;
+          url: string;
+          storagePath: string;
+        };
+        form.setValue("photoUrl", json.url, { shouldDirty: true });
+        form.setValue("photoStoragePath", json.storagePath, {
+          shouldDirty: true,
+        });
+        toast.success(t("photoUploadedToast") || "Снимката е качена успешно");
+        return;
+      }
+
+      // 2. Fallback to Firebase Storage if local route is not available
+      const client = getFirebaseClient();
+      if (client?.storage) {
+        const ext =
+          file.name
+            .split(".")
+            .pop()
+            ?.replace(/[^a-zA-Z0-9]/g, "") || "webp";
+        const folderSegment = editingVehicle?.id ?? "cover";
+        const storagePath = `vehicles/${ownerUid}/${folderSegment}/photo-${Date.now()}.${ext}`;
+        const storageRef = ref(client.storage, storagePath);
+
+        await uploadBytes(storageRef, file, {
+          contentType: file.type,
+          cacheControl: "public,max-age=86400",
+        });
+        const url = await getDownloadURL(storageRef);
+
+        form.setValue("photoUrl", url, { shouldDirty: true });
+        form.setValue("photoStoragePath", storagePath, { shouldDirty: true });
+        toast.success(t("photoUploadedToast") || "Снимката е качена успешно");
+        return;
+      }
+
+      throw new Error("Upload failed");
+    } catch (err) {
+      console.error("Vehicle photo upload failed:", err);
       toast.error("Photo upload failed.");
     } finally {
       setUploadingPhoto(false);

@@ -50,7 +50,19 @@ export const vehicleFormSchema = z.object({
     .int("mileageInvalid")
     .min(0, "mileageInvalid")
     .max(3_000_000, "mileageInvalid"),
-  photoUrl: z.string().url().nullable().optional(),
+  photoUrl: z
+    .string()
+    .refine(
+      (val) =>
+        !val ||
+        val.startsWith("/") ||
+        val.startsWith("http://") ||
+        val.startsWith("https://") ||
+        val.startsWith("data:"),
+      { message: "urlInvalid" }
+    )
+    .nullable()
+    .optional(),
   photoStoragePath: z.string().max(400).nullable().optional(),
 });
 

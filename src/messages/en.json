@@ -638,6 +638,7 @@
       "vehiclePhoto": "Vehicle photo (optional)",
       "uploadPhoto": "Upload photo",
       "uploadingPhoto": "Uploading...",
+      "photoUploadedToast": "Photo uploaded successfully.",
       "removePhoto": "Remove photo",
       "openVehicle": "Open diary",
       "exportPdf": "Export Service Book (PDF)",
