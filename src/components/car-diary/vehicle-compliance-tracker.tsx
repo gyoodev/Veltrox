@@ -779,19 +779,19 @@ export function VehicleComplianceTracker({
                     )}
                   </div>
 
-                  <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 border-t border-border/60 pt-3">
-                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
+                  <div className="mt-4 border-t border-border/60 pt-3 space-y-2.5">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
                       <BellRing className="h-3 w-3 text-primary shrink-0" />
                       <span>{t("alertLeadLabel")}</span>
                     </span>
 
-                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 w-full sm:w-auto">
+                    <div className="grid grid-cols-2 gap-2 w-full">
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
                         className={cn(
-                          "h-8 px-2 text-xs gap-1 w-full sm:w-auto justify-center font-medium",
+                          "h-8 px-2 text-xs gap-1.5 w-full justify-center font-medium",
                           card.type === "vignette" &&
                             "border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300",
                           card.type === "technical_inspection" &&
@@ -801,16 +801,8 @@ export function VehicleComplianceTracker({
                         )}
                         onClick={() => void handleOpenCheckModal(card.type)}
                       >
-                        <Search className="h-3 w-3 shrink-0" />
-                        <span className="truncate">
-                          {card.type === "vignette"
-                            ? t("checkVignetteBtn")
-                            : card.type === "technical_inspection"
-                              ? t("rtaCheckBtn")
-                              : card.type === "liability_insurance"
-                                ? t("checkLiabilityBtn")
-                                : t("checkBtn")}
-                        </span>
+                        <Search className="h-3.5 w-3.5 shrink-0" />
+                        <span>{t("checkBtn")}</span>
                       </Button>
 
                       <Button
@@ -823,20 +815,18 @@ export function VehicleComplianceTracker({
                               ? "outline"
                               : "secondary"
                         }
-                        className="h-8 px-2 text-xs gap-1 w-full sm:w-auto justify-center font-medium"
+                        className="h-8 px-2 text-xs gap-1.5 w-full justify-center font-medium"
                         onClick={() => openSlotEditor(card)}
                       >
                         {card.expiryDate ? (
                           <>
-                            <Pencil className="h-3 w-3 shrink-0" />
-                            <span className="truncate">
-                              {isExpired || isSoon ? t("renewBtn") : t("editBtn")}
-                            </span>
+                            <Pencil className="h-3.5 w-3.5 shrink-0" />
+                            <span>{t("editBtn")}</span>
                           </>
                         ) : (
                           <>
                             <CalendarPlus className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate">{t("setExpiryBtn")}</span>
+                            <span>{t("addBtn")}</span>
                           </>
                         )}
                       </Button>
