@@ -14,6 +14,7 @@ import {
   Landmark,
   Loader2,
   Pencil,
+  RotateCw,
   Search,
   Shield,
   ShieldCheck,
@@ -52,6 +53,7 @@ import {
 } from "@/components/ui/select";
 import { cn, formatDate } from "@/lib/utils";
 import type { BgTollCheckResponse } from "@/lib/compliance/bgtoll";
+import type { RtaInspectionResult } from "@/lib/compliance/rta";
 import type {
   AppLocale,
   ComplianceReminderType,
@@ -204,6 +206,14 @@ export function VehicleComplianceTracker({
   const [bgtollResult, setBgtollResult] = useState<BgTollCheckResponse | null>(
     null
   );
+  // RTA Inspection States:
+  const [rtaCaptchaImage, setRtaCaptchaImage] = useState<string | null>(null);
+  const [rtaSessionToken, setRtaSessionToken] = useState<string | null>(null);
+  const [rtaCaptchaInput, setRtaCaptchaInput] = useState<string>("");
+  const [rtaLoadingCaptcha, setRtaLoadingCaptcha] = useState(false);
+  const [rtaChecking, setRtaChecking] = useState(false);
+  const [rtaResult, setRtaResult] = useState<RtaInspectionResult | null>(null);
+  const [rtaError, setRtaError] = useState<string | null>(null);
   const [checkDueDateInput, setCheckDueDateInput] = useState<string>("");
   const [checkNotesInput, setCheckNotesInput] = useState<string>("");
 
@@ -399,6 +409,8 @@ export function VehicleComplianceTracker({
     setCheckingSlot(slotType);
     setCheckModalOpen(true);
     setBgtollResult(null);
+    setRtaResult(null);
+    setRtaError(null);
 
     const card = slotCards.find((c) => c.type === slotType);
     setCheckDueDateInput(card?.expiryDate ?? addMonthsIso(null, 12));
@@ -431,6 +443,83 @@ export function VehicleComplianceTracker({
       } finally {
         setCheckingLoading(false);
       }
+    } else if (slotType === "technical_inspection") {
+      void loadRtaCaptcha();
+    }
+  };
+
+  const loadRtaCaptcha = async () => {
+    setRtaLoadingCaptcha(true);
+    setRtaCaptchaInput("");
+    setRtaError(null);
+    try {
+      const res = await fetch("/api/compliance/rta-captcha");
+      if (res.ok) {
+        const data = (await res.json()) as {
+          ok: boolean;
+          captchaImage: string;
+          sessionToken: string;
+          error?: string;
+        };
+        if (data.ok && data.captchaImage) {
+          setRtaCaptchaImage(data.captchaImage);
+          setRtaSessionToken(data.sessionToken);
+        } else {
+          setRtaError(data.error || "Неуспешно зареждане на код за сигурност");
+        }
+      } else {
+        setRtaError("Неуспешна връзка с РТА портала");
+      }
+    } catch {
+      setRtaError("Грешка при връзка с РТА");
+    } finally {
+      setRtaLoadingCaptcha(false);
+    }
+  };
+
+  const handleCheckRta = async () => {
+    if (!activeVehicle || !rtaCaptchaInput.trim() || !rtaSessionToken) return;
+
+    setRtaChecking(true);
+    setRtaError(null);
+    try {
+      const res = await fetch("/api/compliance/check-inspection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plate: activeVehicle.plateNumber,
+          captcha: rtaCaptchaInput.trim(),
+          sessionToken: rtaSessionToken,
+        }),
+      });
+
+      const data = (await res.json()) as RtaInspectionResult;
+      setRtaResult(data);
+
+      if (data.captchaMismatch) {
+        setRtaError(t("rtaCaptchaMismatch"));
+        void loadRtaCaptcha();
+        return;
+      }
+
+      if (data.found && data.nextInspectionDate) {
+        setCheckDueDateInput(data.nextInspectionDate);
+        const ecoNote = data.ecoCategory
+          ? ` | ${t("rtaEcoGroup")}: ${data.ecoCategory}`
+          : "";
+        const vinNote = data.vin ? ` | ${t("rtaVin")}: ${data.vin}` : "";
+        setCheckNotesInput(
+          `ГТП валиден до ${data.rawNextInspectionDate || data.nextInspectionDate}${ecoNote}${vinNote}`
+        );
+        toast.success(t("rtaCheckFoundTitle"));
+      } else if (!data.found) {
+        void loadRtaCaptcha();
+      }
+    } catch {
+      setRtaError("Грешка при проверка в РТА");
+      void loadRtaCaptcha();
+    } finally {
+      setRtaChecking(false);
     }
   };
 
@@ -634,14 +723,18 @@ export function VehicleComplianceTracker({
                         className={cn(
                           "h-8 text-xs gap-1",
                           card.type === "vignette" &&
-                            "border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                            "border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300",
+                          card.type === "technical_inspection" &&
+                            "border-indigo-500/35 text-indigo-400 hover:bg-indigo-500/10 hover:text-indigo-300"
                         )}
                         onClick={() => void handleOpenCheckModal(card.type)}
                       >
                         <Search className="h-3 w-3" />
                         {card.type === "vignette"
                           ? t("checkVignetteBtn")
-                          : t("checkBtn")}
+                          : card.type === "technical_inspection"
+                            ? t("rtaCheckBtn")
+                            : t("checkBtn")}
                       </Button>
 
                       <Button
@@ -816,7 +909,21 @@ export function VehicleComplianceTracker({
                   ? bgtollResult?.found
                     ? t("vignetteFoundTitle")
                     : t("items.vignette")
-                  : t(`${checkingSlot === "liability_insurance" ? "gf" : checkingSlot === "technical_inspection" ? "rta" : checkingSlot === "casco" ? "casco" : checkingSlot === "fire_extinguisher" ? "extinguisher" : "tax"}CheckTitle`)
+                  : checkingSlot === "technical_inspection"
+                    ? rtaResult?.found
+                      ? t("rtaCheckFoundTitle")
+                      : t("rtaCheckTitle")
+                    : t(
+                        `${
+                          checkingSlot === "liability_insurance"
+                            ? "gf"
+                            : checkingSlot === "casco"
+                              ? "casco"
+                              : checkingSlot === "fire_extinguisher"
+                                ? "extinguisher"
+                                : "tax"
+                        }CheckTitle`
+                      )
                 : t("checkDialogTitle")}
             </DialogTitle>
             <DialogDescription>
@@ -1075,11 +1182,18 @@ export function VehicleComplianceTracker({
 
             {/* Technical Inspection (RTA) */}
             {checkingSlot === "technical_inspection" ? (
-              <div className="space-y-3">
+              <div className="space-y-3.5">
+                {/* Official RTA Link Banner */}
                 <div className="rounded-2xl border border-border bg-secondary/30 p-3.5 space-y-2.5">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {t("rtaCheckDesc")}
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {t("rtaCheckDesc")}
+                    </p>
+                    <Badge variant="outline" className="shrink-0 text-[10px] font-mono border-indigo-500/30 text-indigo-400">
+                      RTA / ИААА
+                    </Badge>
+                  </div>
+
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       type="button"
@@ -1118,10 +1232,10 @@ export function VehicleComplianceTracker({
                       variant="secondary"
                       size="sm"
                       asChild
-                      className="h-8 text-xs gap-1.5 ml-auto"
+                      className="h-8 text-xs gap-1.5 ml-auto font-medium"
                     >
                       <a
-                        href="https://rta.government.bg"
+                        href="https://rta.government.bg/services/check-inspection/index.html"
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -1131,6 +1245,234 @@ export function VehicleComplianceTracker({
                     </Button>
                   </div>
                 </div>
+
+                {/* RTA Live Check Box */}
+                {rtaResult?.found ? (
+                  <div
+                    className={cn(
+                      "rounded-2xl border p-4 space-y-3",
+                      rtaResult.isValid
+                        ? "border-emerald-500/40 bg-emerald-500/[0.08]"
+                        : "border-destructive/40 bg-destructive/[0.08]"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {rtaResult.isValid ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                        )}
+                        <div>
+                          <h4 className="text-sm font-bold text-foreground">
+                            {rtaResult.isValid
+                              ? t("rtaCheckFoundTitle")
+                              : t("rtaCheckExpiredTitle")}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {rtaResult.isValid
+                              ? `Превозното средство с рег. № ${rtaResult.normalizedPlate} има валиден преглед.`
+                              : t("rtaCheckExpiredDesc", {
+                                  plate: rtaResult.normalizedPlate,
+                                  date: rtaResult.rawNextInspectionDate || "-",
+                                })}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant={rtaResult.isValid ? "success" : "destructive"}
+                        className="shrink-0"
+                      >
+                        {rtaResult.isValid
+                          ? t("rtaStatusValid")
+                          : t("rtaStatusExpired")}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 rounded-xl border border-border/60 bg-background/60 p-3 text-xs font-mono">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground uppercase font-sans">
+                          {t("rtaNextInspection")}
+                        </span>
+                        <p className="font-bold text-foreground text-sm">
+                          {rtaResult.rawNextInspectionDate || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground uppercase font-sans">
+                          {t("rtaEcoGroup")}
+                        </span>
+                        <p className="font-bold text-foreground text-sm">
+                          {rtaResult.ecoCategory
+                            ? `ЕКО ${rtaResult.ecoCategory}`
+                            : "Няма данни"}
+                        </p>
+                      </div>
+                      {rtaResult.vin ? (
+                        <div className="col-span-2 pt-1 border-t border-border/40">
+                          <span className="text-[10px] text-muted-foreground uppercase font-sans">
+                            {t("rtaVin")}
+                          </span>
+                          <p className="font-bold text-foreground truncate">
+                            {rtaResult.vin}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={() => {
+                          setRtaResult(null);
+                          void loadRtaCaptcha();
+                        }}
+                      >
+                        <RotateCw className="h-3 w-3" />
+                        <span>Нова проверка</span>
+                      </Button>
+                    </div>
+                  </div>
+                ) : rtaResult && !rtaResult.found ? (
+                  <div className="rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
+                      <div>
+                        <h4 className="text-sm font-bold text-foreground">
+                          {t("rtaCheckNotFoundTitle")}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {t("rtaCheckNotFoundDesc", {
+                            plate: activeVehicle.plateNumber,
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={() => {
+                          setRtaResult(null);
+                          void loadRtaCaptcha();
+                        }}
+                      >
+                        <RotateCw className="h-3 w-3" />
+                        <span>Опитай отново</span>
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-border/80 bg-secondary/20 p-4 space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Директна проверка в РТА
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground">
+                          Въведете кода от изображението по-долу:
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs font-mono">
+                        {activeVehicle.plateNumber}
+                      </Badge>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="relative flex items-center justify-center h-10 min-w-28 rounded-lg border border-border bg-white p-1 overflow-hidden shadow-sm">
+                          {rtaLoadingCaptcha ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          ) : rtaCaptchaImage ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={rtaCaptchaImage}
+                              alt="RTA Captcha"
+                              className="h-8 object-contain"
+                            />
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              Няма код
+                            </span>
+                          )}
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={rtaLoadingCaptcha}
+                          onClick={() => void loadRtaCaptcha()}
+                          className="h-10 w-10 p-0 shrink-0"
+                          title={t("rtaCaptchaReload")}
+                          aria-label={t("rtaCaptchaReload")}
+                        >
+                          <RotateCw
+                            className={cn(
+                              "h-4 w-4",
+                              rtaLoadingCaptcha && "animate-spin"
+                            )}
+                          />
+                        </Button>
+                      </div>
+
+                      <Input
+                        value={rtaCaptchaInput}
+                        onChange={(e) =>
+                          setRtaCaptchaInput(
+                            e.target.value.toUpperCase().slice(0, 4)
+                          )
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && rtaCaptchaInput.length === 4) {
+                            e.preventDefault();
+                            void handleCheckRta();
+                          }
+                        }}
+                        placeholder={t("rtaCaptchaPlaceholder")}
+                        maxLength={4}
+                        className="h-10 font-mono tracking-widest text-center uppercase text-base font-bold bg-background/70 border-border/80 flex-1 min-w-24"
+                      />
+
+                      <Button
+                        type="button"
+                        variant="gradient"
+                        disabled={
+                          rtaChecking ||
+                          rtaCaptchaInput.trim().length !== 4 ||
+                          !rtaSessionToken ||
+                          rtaLoadingCaptcha
+                        }
+                        onClick={() => void handleCheckRta()}
+                        className="h-10 px-4 text-xs font-semibold shrink-0"
+                      >
+                        {rtaChecking ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                            {t("rtaChecking")}
+                          </>
+                        ) : (
+                          <>
+                            <Search className="h-4 w-4 mr-1.5" />
+                            {t("rtaCheckBtn")}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {rtaError ? (
+                      <p className="text-xs text-destructive font-medium flex items-center gap-1.5 pt-1">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                        <span>{rtaError}</span>
+                      </p>
+                    ) : null}
+                  </div>
+                )}
 
                 <div className="space-y-2 pt-1">
                   <Label htmlFor="check-date-rta">{t("expiryDateLabel")}</Label>
@@ -1302,7 +1644,8 @@ export function VehicleComplianceTracker({
                   <Loader2 className="h-4 w-4 animate-spin" />
                   {tCommon("saving")}
                 </>
-              ) : checkingSlot === "vignette" && bgtollResult?.found ? (
+              ) : (checkingSlot === "vignette" && bgtollResult?.found) ||
+                (checkingSlot === "technical_inspection" && rtaResult?.found) ? (
                 <>
                   <Check className="h-4 w-4" />
                   {t("addVignetteBtn")}
