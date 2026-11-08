@@ -144,7 +144,57 @@ export function VehicleFormDialog({
 
     setUploadingPhoto(true);
     try {
-      // 1. Upload directly to public folder (public/uploads/cars)
+      const apiKey =
+        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
+        "081c67f1d21a81269c6275b692e61030";
+
+      // 1. Primary: Upload directly to ImgBB cloud API from the browser
+      try {
+        const imgbbForm = new FormData();
+        imgbbForm.append("image", file);
+        imgbbForm.append("name", `car-${Date.now()}`);
+
+        const imgbbRes = await fetch(
+          `https://api.imgbb.com/1/upload?key=${apiKey}`,
+          {
+            method: "POST",
+            body: imgbbForm,
+          }
+        );
+
+        if (imgbbRes.ok) {
+          const imgbbJson = (await imgbbRes.json()) as {
+            data?: {
+              id: string;
+              url: string;
+              display_url: string;
+              delete_url: string;
+            };
+            success: boolean;
+            status: number;
+          };
+
+          if (imgbbJson.success && imgbbJson.data) {
+            const cloudUrl =
+              imgbbJson.data.display_url || imgbbJson.data.url;
+            form.setValue("photoUrl", cloudUrl, { shouldDirty: true });
+            form.setValue(
+              "photoStoragePath",
+              `imgbb:${imgbbJson.data.id}`,
+              { shouldDirty: true }
+            );
+            toast.success(t("photoUploadedToast"));
+            return;
+          }
+        }
+      } catch (cloudErr) {
+        console.warn(
+          "Direct browser ImgBB upload failed, trying server proxy:",
+          cloudErr
+        );
+      }
+
+      // 2. Secondary: Upload via server endpoint (which also relays to ImgBB)
       const formData = new FormData();
       formData.append("file", file);
 
@@ -163,11 +213,11 @@ export function VehicleFormDialog({
         form.setValue("photoStoragePath", json.storagePath, {
           shouldDirty: true,
         });
-        toast.success(t("photoUploadedToast") || "Снимката е качена успешно");
+        toast.success(t("photoUploadedToast"));
         return;
       }
 
-      // 2. Fallback to Firebase Storage if local route is not available
+      // 3. Fallback to Firebase Storage if both ImgBB & local route fail
       const client = getFirebaseClient();
       if (client?.storage) {
         const ext =
@@ -187,7 +237,7 @@ export function VehicleFormDialog({
 
         form.setValue("photoUrl", url, { shouldDirty: true });
         form.setValue("photoStoragePath", storagePath, { shouldDirty: true });
-        toast.success(t("photoUploadedToast") || "Снимката е качена успешно");
+        toast.success(t("photoUploadedToast"));
         return;
       }
 
