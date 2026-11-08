@@ -19,7 +19,6 @@ import { useTranslations } from "next-intl";
 import { type ChangeEvent, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { BulgariaFuelPricesWidget } from "@/components/profile/bulgaria-fuel-prices-widget";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -78,7 +77,7 @@ interface ProfileSettingsViewProps {
 
 export function ProfileSettingsView({
   initialProfile,
-  initialFuelPrices = null,
+  initialFuelPrices: _initialFuelPrices = null,
 }: ProfileSettingsViewProps) {
   const t = useTranslations("profile");
   const tVal = useTranslations("validation");
@@ -257,9 +256,6 @@ export function ProfileSettingsView({
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">{t("subtitle")}</p>
       </div>
-
-      {/* Live Bulgaria Retail Fuel Prices & Trip Cost Estimator */}
-      <BulgariaFuelPricesWidget initialData={initialFuelPrices} />
 
       <form
         onSubmit={profileForm.handleSubmit(onSubmitProfile)}

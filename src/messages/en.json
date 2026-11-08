@@ -1224,6 +1224,8 @@
     "liveBadge": "Live • BG",
     "subtitle": "Average retail pump prices across Bulgarian stations (EUR & BGN fixed rate)",
     "refreshBtn": "Refresh",
+    "expandBtn": "Expand",
+    "collapseBtn": "Collapse",
     "unavailable": "Live fuel prices are temporarily unavailable. Please try refreshing shortly.",
     "unitLiter": "L",
     "unitKg": "kg",

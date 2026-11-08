@@ -2,6 +2,8 @@
 
 import {
   Calculator,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Fuel,
   Minus,
@@ -48,10 +50,14 @@ const FUEL_ACCENTS: Record<BulgariaFuelCode, string> = {
 
 interface BulgariaFuelPricesWidgetProps {
   initialData?: BulgariaFuelPricesPayload | null;
+  className?: string;
+  defaultCollapsed?: boolean;
 }
 
 export function BulgariaFuelPricesWidget({
   initialData = null,
+  className,
+  defaultCollapsed = false,
 }: BulgariaFuelPricesWidgetProps) {
   const t = useTranslations("fuelWidget");
   const locale = useLocale() as AppLocale;
@@ -65,6 +71,30 @@ export function BulgariaFuelPricesWidget({
   const [selectedCode, setSelectedCode] = useState<BulgariaFuelCode>("gasoline");
   const [distanceKm, setDistanceKm] = useState<string>("100");
   const [consumption, setConsumption] = useState<string>("7.0");
+  const [collapsed, setCollapsed] = useState<boolean>(defaultCollapsed);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("veltrox_fuel_widget_collapsed");
+      if (stored !== null) {
+        setCollapsed(stored === "true");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("veltrox_fuel_widget_collapsed", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   const fetchPrices = async (forceRefresh: boolean) => {
     if (forceRefresh) {
@@ -134,7 +164,12 @@ export function BulgariaFuelPricesWidget({
   }, [activeFuel, distanceKm, consumption]);
 
   return (
-    <Card className="overflow-hidden border-primary/25">
+    <Card
+      className={cn(
+        "overflow-hidden border-primary/25 shadow-sm transition-all",
+        className
+      )}
+    >
       <CardHeader className="pb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -157,27 +192,98 @@ export function BulgariaFuelPricesWidget({
             </CardDescription>
           </div>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={loading || refreshing}
-            onClick={() => void fetchPrices(true)}
-            aria-label={t("refreshBtn")}
-          >
-            <RefreshCw
-              className={cn(
-                "h-3.5 w-3.5",
-                (loading || refreshing) && "animate-spin"
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading || refreshing}
+              onClick={() => void fetchPrices(true)}
+              aria-label={t("refreshBtn")}
+              className="h-8 gap-1.5 text-xs"
+            >
+              <RefreshCw
+                className={cn(
+                  "h-3.5 w-3.5",
+                  (loading || refreshing) && "animate-spin"
+                )}
+                aria-hidden="true"
+              />
+              <span>{t("refreshBtn")}</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={toggleCollapsed}
+              className="h-8 gap-1 text-xs"
+              aria-label={collapsed ? t("expandBtn") : t("collapseBtn")}
+            >
+              {collapsed ? (
+                <>
+                  <span>{t("expandBtn")}</span>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </>
+              ) : (
+                <>
+                  <span>{t("collapseBtn")}</span>
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </>
               )}
-              aria-hidden="true"
-            />
-            {t("refreshBtn")}
-          </Button>
+            </Button>
+          </div>
         </div>
+
+        {/* Compact Live Ticker Strip when Collapsed */}
+        {collapsed && payload ? (
+          <div className="mt-3.5 flex flex-wrap items-center gap-2.5 border-t border-border/60 pt-3">
+            {payload.fuels.map((fuel) => {
+              const unitLabel =
+                fuel.unit === "kg" ? t("unitKg") : t("unitLiter");
+              const isDown = fuel.delta30dEur < 0;
+              const isUp = fuel.delta30dEur > 0;
+              return (
+                <button
+                  key={fuel.code}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCode(fuel.code);
+                    toggleCollapsed();
+                  }}
+                  className="flex items-center gap-2 rounded-xl border border-border bg-secondary/35 px-2.5 py-1 text-xs font-mono hover:border-primary/40 hover:bg-secondary/60 transition-colors cursor-pointer text-left"
+                >
+                  <span className="font-sans font-medium text-foreground">
+                    {t(`fuels.${fuel.code}`)}:
+                  </span>
+                  <span className="font-extrabold text-primary">
+                    €{fuel.priceEur.toFixed(2)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    ({fuel.priceBgn.toFixed(2)} {t("bgnShort")}/{unitLabel})
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[10px] font-semibold",
+                      isDown
+                        ? "text-emerald-400"
+                        : isUp
+                          ? "text-amber-400"
+                          : "text-muted-foreground"
+                    )}
+                  >
+                    {fuel.delta30dPercent > 0 ? "+" : ""}
+                    {fuel.delta30dPercent.toFixed(1)}%
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </CardHeader>
 
-      <CardContent className="space-y-5">
+      {!collapsed ? (
+        <CardContent className="space-y-5">
         {loading && !payload ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map((n) => (
@@ -430,6 +536,7 @@ export function BulgariaFuelPricesWidget({
           </>
         ) : null}
       </CardContent>
+      ) : null}
     </Card>
   );
 }

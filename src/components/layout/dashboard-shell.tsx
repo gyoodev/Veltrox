@@ -28,6 +28,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { BulgariaFuelPricesWidget } from "@/components/profile/bulgaria-fuel-prices-widget";
 import { useAuth } from "@/components/providers/auth-provider";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
@@ -527,9 +528,14 @@ export function DashboardShell({
 
         <main
           id="main-content"
-          className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 print:max-w-none print:p-0"
+          className="mx-auto w-full max-w-6xl flex-1 space-y-8 px-4 py-8 sm:px-8 print:max-w-none print:p-0"
         >
           {children}
+
+          {/* Global Bulgaria Fuel Prices Widget for All Authenticated Users */}
+          <section aria-label="Bulgaria Fuel Prices" className="print:hidden pt-2">
+            <BulgariaFuelPricesWidget />
+          </section>
         </main>
       </div>
 
