@@ -5,14 +5,19 @@ import {
   BellRing,
   Calendar,
   CalendarPlus,
+  Check,
   CheckCircle2,
   ClipboardCheck,
+  Copy,
+  ExternalLink,
   Flame,
   Landmark,
   Loader2,
   Pencil,
+  Search,
   Shield,
   ShieldCheck,
+  Sparkles,
   Ticket,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -46,6 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn, formatDate } from "@/lib/utils";
+import type { BgTollCheckResponse } from "@/lib/compliance/bgtoll";
 import type {
   AppLocale,
   ComplianceReminderType,
@@ -185,12 +191,21 @@ export function VehicleComplianceTracker({
   const [editingSlot, setEditingSlot] = useState<ComplianceReminderType | null>(
     null
   );
-  const [editingReminderId, setEditingReminderId] = useState<string | null>(
-    null
-  );
   const [dueDateInput, setDueDateInput] = useState<string>("");
   const [notesInput, setNotesInput] = useState<string>("");
   const [saving, setSaving] = useState(false);
+
+  // Automatic Check Modal States:
+  const [checkModalOpen, setCheckModalOpen] = useState(false);
+  const [checkingSlot, setCheckingSlot] = useState<ComplianceReminderType | null>(
+    null
+  );
+  const [checkingLoading, setCheckingLoading] = useState(false);
+  const [bgtollResult, setBgtollResult] = useState<BgTollCheckResponse | null>(
+    null
+  );
+  const [checkDueDateInput, setCheckDueDateInput] = useState<string>("");
+  const [checkNotesInput, setCheckNotesInput] = useState<string>("");
 
   const activeVehicle = useMemo(
     () =>
@@ -271,32 +286,44 @@ export function VehicleComplianceTracker({
 
   const openSlotEditor = (card: (typeof slotCards)[number]) => {
     setEditingSlot(card.type);
-    setEditingReminderId(card.activeReminder?.id ?? null);
     setDueDateInput(card.expiryDate ?? addMonthsIso(null, 12));
     setNotesInput(card.activeReminder?.notes ?? card.fallbackDoc?.notes ?? "");
     setModalOpen(true);
   };
 
-  const handleSaveSlot = async () => {
-    if (!editingSlot || !dueDateInput || !/^\d{4}-\d{2}-\d{2}$/.test(dueDateInput)) {
+  const saveReminderForSlot = async (
+    slotType: ComplianceReminderType,
+    dueDate: string,
+    notes: string | null
+  ): Promise<boolean> => {
+    if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
       toast.error(t("dateRequiredToast"));
-      return;
+      return false;
     }
 
     setSaving(true);
     try {
-      const title = t(`items.${editingSlot}`);
-      const trimmedNotes = notesInput.trim() ? notesInput.trim() : null;
+      const title = t(`items.${slotType}`);
+      const trimmedNotes = notes?.trim() ? notes.trim() : null;
+
+      // Check if there is an existing reminder for this slot on activeVehicle
+      const existingReminder = reminders.find(
+        (r) =>
+          r.vehicleId === activeVehicle.id &&
+          r.type === slotType &&
+          r.status !== "completed" &&
+          r.status !== "cancelled"
+      );
 
       let res: Response;
-      if (editingReminderId) {
-        res = await fetch(`/api/reminders/${editingReminderId}`, {
+      if (existingReminder) {
+        res = await fetch(`/api/reminders/${existingReminder.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            type: editingSlot,
+            type: slotType,
             title,
-            dueDate: dueDateInput,
+            dueDate,
             notes: trimmedNotes,
             status: "scheduled",
           }),
@@ -307,9 +334,9 @@ export function VehicleComplianceTracker({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             vehicleId: activeVehicle.id,
-            type: editingSlot,
+            type: slotType,
             title,
-            dueDate: dueDateInput,
+            dueDate,
             dueMileageKm: null,
             notes: trimmedNotes,
             channels: ["email"],
@@ -319,7 +346,7 @@ export function VehicleComplianceTracker({
 
       if (!res.ok) {
         toast.error(t("saveErrorToast"));
-        return;
+        return false;
       }
 
       const json = (await res.json()) as { reminder: Reminder };
@@ -341,12 +368,81 @@ export function VehicleComplianceTracker({
         toast.success(t("savedToast"));
       }
 
-      setModalOpen(false);
       router.refresh();
+      return true;
     } catch {
       toast.error(t("saveErrorToast"));
+      return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveSlot = async () => {
+    if (!editingSlot) return;
+    const ok = await saveReminderForSlot(editingSlot, dueDateInput, notesInput);
+    if (ok) {
+      setModalOpen(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, msg: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(msg);
+    } catch {
+      toast.success(msg);
+    }
+  };
+
+  const handleOpenCheckModal = async (slotType: ComplianceReminderType) => {
+    setCheckingSlot(slotType);
+    setCheckModalOpen(true);
+    setBgtollResult(null);
+
+    const card = slotCards.find((c) => c.type === slotType);
+    setCheckDueDateInput(card?.expiryDate ?? addMonthsIso(null, 12));
+    setCheckNotesInput(card?.activeReminder?.notes ?? "");
+
+    if (slotType === "vignette") {
+      setCheckingLoading(true);
+      try {
+        const res = await fetch(
+          `/api/compliance/check-bgtoll?plate=${encodeURIComponent(
+            activeVehicle.plateNumber
+          )}`
+        );
+        if (res.ok) {
+          const data = (await res.json()) as BgTollCheckResponse;
+          setBgtollResult(data);
+          if (data.found && data.vignette?.validDateTo) {
+            setCheckDueDateInput(data.vignette.validDateTo);
+            setCheckNotesInput(
+              `Е-винетка № ${data.vignette.vignetteNumber} (${
+                data.vignette.productType || "BGTOLL"
+              })`
+            );
+          }
+        } else {
+          toast.error(t("checkingError"));
+        }
+      } catch {
+        toast.error(t("checkingError"));
+      } finally {
+        setCheckingLoading(false);
+      }
+    }
+  };
+
+  const handleApplyCheckResult = async () => {
+    if (!checkingSlot || !checkDueDateInput) return;
+    const ok = await saveReminderForSlot(
+      checkingSlot,
+      checkDueDateInput,
+      checkNotesInput
+    );
+    if (ok) {
+      setCheckModalOpen(false);
     }
   };
 
@@ -378,29 +474,42 @@ export function VehicleComplianceTracker({
               </CardDescription>
             </div>
 
-            {!scopedVehicleId && vehicles.length > 1 ? (
-              <div className="w-full sm:w-64">
-                <Select
-                  value={activeVehicle.id}
-                  onValueChange={setSelectedVehicleId}
-                >
-                  <SelectTrigger aria-label={t("selectVehicleAria")}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicles.map((veh) => (
-                      <SelectItem key={veh.id} value={veh.id}>
-                        {veh.make} {veh.model} ({veh.plateNumber})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : !scopedVehicleId ? (
-              <span className="inline-flex items-center self-start rounded-lg border border-border bg-secondary px-2.5 py-1 font-mono text-xs font-bold text-foreground sm:self-auto">
-                {activeVehicle.plateNumber}
-              </span>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleOpenCheckModal("vignette")}
+                className="h-9 gap-1.5 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 font-medium"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                <span>{t("checkAllBtn")}</span>
+              </Button>
+
+              {!scopedVehicleId && vehicles.length > 1 ? (
+                <div className="w-full sm:w-64">
+                  <Select
+                    value={activeVehicle.id}
+                    onValueChange={setSelectedVehicleId}
+                  >
+                    <SelectTrigger aria-label={t("selectVehicleAria")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vehicles.map((veh) => (
+                        <SelectItem key={veh.id} value={veh.id}>
+                          {veh.make} {veh.model} ({veh.plateNumber})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : !scopedVehicleId ? (
+                <span className="inline-flex items-center self-start rounded-lg border border-border bg-secondary px-2.5 py-1 font-mono text-xs font-bold text-foreground sm:self-auto">
+                  {activeVehicle.plateNumber}
+                </span>
+              ) : null}
+            </div>
           </div>
         </CardHeader>
 
@@ -511,37 +620,56 @@ export function VehicleComplianceTracker({
                     )}
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
                     <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                       <BellRing className="h-3 w-3 text-primary" />
                       {t("alertLeadLabel")}
                     </span>
 
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={
-                        isExpired || isSoon
-                          ? "gradient"
-                          : card.expiryDate
-                            ? "outline"
-                            : "secondary"
-                      }
-                      className="h-8 text-xs"
-                      onClick={() => openSlotEditor(card)}
-                    >
-                      {card.expiryDate ? (
-                        <>
-                          <Pencil className="h-3 w-3" />
-                          {isExpired || isSoon ? t("renewBtn") : t("editBtn")}
-                        </>
-                      ) : (
-                        <>
-                          <CalendarPlus className="h-3.5 w-3.5" />
-                          {t("setExpiryBtn")}
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className={cn(
+                          "h-8 text-xs gap-1",
+                          card.type === "vignette" &&
+                            "border-emerald-500/35 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+                        )}
+                        onClick={() => void handleOpenCheckModal(card.type)}
+                      >
+                        <Search className="h-3 w-3" />
+                        {card.type === "vignette"
+                          ? t("checkVignetteBtn")
+                          : t("checkBtn")}
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          isExpired || isSoon
+                            ? "gradient"
+                            : card.expiryDate
+                              ? "outline"
+                              : "secondary"
+                        }
+                        className="h-8 text-xs"
+                        onClick={() => openSlotEditor(card)}
+                      >
+                        {card.expiryDate ? (
+                          <>
+                            <Pencil className="h-3 w-3" />
+                            {isExpired || isSoon ? t("renewBtn") : t("editBtn")}
+                          </>
+                        ) : (
+                          <>
+                            <CalendarPlus className="h-3.5 w-3.5" />
+                            {t("setExpiryBtn")}
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -659,6 +787,518 @@ export function VehicleComplianceTracker({
                 </>
               ) : (
                 tCommon("save")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Automatic Registry Check & Add Modal */}
+      <Dialog open={checkModalOpen} onOpenChange={setCheckModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {checkingSlot === "vignette" ? (
+                <Ticket className="h-5 w-5 text-emerald-400" />
+              ) : checkingSlot === "liability_insurance" ? (
+                <ShieldCheck className="h-5 w-5 text-blue-400" />
+              ) : checkingSlot === "technical_inspection" ? (
+                <ClipboardCheck className="h-5 w-5 text-indigo-400" />
+              ) : checkingSlot === "casco" ? (
+                <Shield className="h-5 w-5 text-violet-400" />
+              ) : checkingSlot === "fire_extinguisher" ? (
+                <Flame className="h-5 w-5 text-orange-400" />
+              ) : (
+                <Landmark className="h-5 w-5 text-cyan-400" />
+              )}
+              {checkingSlot
+                ? checkingSlot === "vignette"
+                  ? bgtollResult?.found
+                    ? t("vignetteFoundTitle")
+                    : t("items.vignette")
+                  : t(`${checkingSlot === "liability_insurance" ? "gf" : checkingSlot === "technical_inspection" ? "rta" : checkingSlot === "casco" ? "casco" : checkingSlot === "fire_extinguisher" ? "extinguisher" : "tax"}CheckTitle`)
+                : t("checkDialogTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("checkDialogDesc", { plate: activeVehicle.plateNumber })}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            {/* Vignette BGTOLL Live Result */}
+            {checkingSlot === "vignette" ? (
+              checkingLoading ? (
+                <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-secondary/30 p-8 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      {t("checkingVignette")}
+                    </p>
+                    <p className="text-xs text-muted-foreground font-mono">
+                      check.bgtoll.bg/check/vignette/plate/BG/
+                      {activeVehicle.plateNumber}
+                    </p>
+                  </div>
+                </div>
+              ) : bgtollResult?.found && bgtollResult.vignette ? (
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                        <span className="font-semibold text-emerald-400">
+                          {t("statusValid")} (BGTOLL)
+                        </span>
+                      </div>
+                      <Badge variant="success" className="font-mono uppercase">
+                        {bgtollResult.normalizedPlate}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl bg-background/60 p-2.5">
+                        <span className="text-muted-foreground block text-[11px]">
+                          {t("vignetteValidTo")}
+                        </span>
+                        <span className="font-mono font-bold text-foreground text-sm">
+                          {formatDate(bgtollResult.vignette.validDateTo, locale)}
+                        </span>
+                      </div>
+                      <div className="rounded-xl bg-background/60 p-2.5">
+                        <span className="text-muted-foreground block text-[11px]">
+                          {t("vignetteTypeLabel")}
+                        </span>
+                        <span className="font-semibold text-foreground truncate block">
+                          {bgtollResult.vignette.productType || "Е-винетка"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 text-[11px] text-muted-foreground flex items-center justify-between px-0.5">
+                      <span>{t("vignetteNumberLabel")}:</span>
+                      <span className="font-mono font-semibold text-foreground">
+                        {bgtollResult.vignette.vignetteNumber}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    {t("vignetteFoundDesc", {
+                      plate: activeVehicle.plateNumber,
+                    })}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4">
+                    <div className="flex items-center gap-2 text-amber-400 font-semibold text-sm">
+                      <AlertTriangle className="h-5 w-5" />
+                      <span>{t("vignetteNotFoundTitle")}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {t("vignetteNotFoundDesc", {
+                        plate: activeVehicle.plateNumber,
+                      })}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="h-8 text-xs gap-1.5"
+                      >
+                        <a
+                          href="https://web.bgtoll.bg"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          <span>{t("openBgtollBuy")}</span>
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <Label htmlFor="check-date-vignette-fallback">
+                      {t("enterDateManually")}
+                    </Label>
+                    <Input
+                      id="check-date-vignette-fallback"
+                      type="date"
+                      value={checkDueDateInput}
+                      onChange={(e) => setCheckDueDateInput(e.target.value)}
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+              )
+            ) : null}
+
+            {/* Liability Insurance (Guarantee Fund) */}
+            {checkingSlot === "liability_insurance" ? (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-border bg-secondary/30 p-3.5 space-y-2.5">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {t("gfCheckDesc")}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5 font-mono"
+                      onClick={() =>
+                        copyToClipboard(
+                          activeVehicle.plateNumber,
+                          t("copiedToast")
+                        )
+                      }
+                    >
+                      <Copy className="h-3 w-3" />
+                      <span>{activeVehicle.plateNumber}</span>
+                    </Button>
+                    {activeVehicle.vin ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1.5 font-mono"
+                        onClick={() =>
+                          copyToClipboard(
+                            activeVehicle.vin || "",
+                            t("copiedToast")
+                          )
+                        }
+                      >
+                        <Copy className="h-3 w-3" />
+                        <span>VIN: {activeVehicle.vin}</span>
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      asChild
+                      className="h-8 text-xs gap-1.5 ml-auto"
+                    >
+                      <a
+                        href="https://www.guaranteefund.org/bg/ez-spravki/proverka-za-grazhdanska-otgovornost"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        <span>{t("openGfPortal")}</span>
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <Label htmlFor="check-date-gf">{t("expiryDateLabel")}</Label>
+                  <Input
+                    id="check-date-gf"
+                    type="date"
+                    value={checkDueDateInput}
+                    onChange={(e) => setCheckDueDateInput(e.target.value)}
+                    className="font-mono"
+                  />
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[11px] text-muted-foreground">
+                      {t("quickAddLabel")}:
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 font-mono text-[11px]"
+                      onClick={() =>
+                        setCheckDueDateInput(
+                          addMonthsIso(checkDueDateInput, 3)
+                        )
+                      }
+                    >
+                      {t("preset3m")} (вноска)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 font-mono text-[11px]"
+                      onClick={() =>
+                        setCheckDueDateInput(
+                          addMonthsIso(checkDueDateInput, 6)
+                        )
+                      }
+                    >
+                      +6 мес.
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 font-mono text-[11px]"
+                      onClick={() =>
+                        setCheckDueDateInput(
+                          addMonthsIso(checkDueDateInput, 12)
+                        )
+                      }
+                    >
+                      {t("preset1y")}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="check-notes-gf">{t("notesLabel")}</Label>
+                  <Input
+                    id="check-notes-gf"
+                    value={checkNotesInput}
+                    onChange={(e) => setCheckNotesInput(e.target.value)}
+                    placeholder="напр. ДЗИ полица № 123456789, вноска 2/4"
+                    maxLength={240}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {/* Technical Inspection (RTA) */}
+            {checkingSlot === "technical_inspection" ? (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-border bg-secondary/30 p-3.5 space-y-2.5">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {t("rtaCheckDesc")}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs gap-1.5 font-mono"
+                      onClick={() =>
+                        copyToClipboard(
+                          activeVehicle.plateNumber,
+                          t("copiedToast")
+                        )
+                      }
+                    >
+                      <Copy className="h-3 w-3" />
+                      <span>{activeVehicle.plateNumber}</span>
+                    </Button>
+                    {activeVehicle.vin ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1.5 font-mono"
+                        onClick={() =>
+                          copyToClipboard(
+                            activeVehicle.vin || "",
+                            t("copiedToast")
+                          )
+                        }
+                      >
+                        <Copy className="h-3 w-3" />
+                        <span>VIN: {activeVehicle.vin}</span>
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      asChild
+                      className="h-8 text-xs gap-1.5 ml-auto"
+                    >
+                      <a
+                        href="https://rta.government.bg"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        <span>{t("openRtaPortal")}</span>
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <Label htmlFor="check-date-rta">{t("expiryDateLabel")}</Label>
+                  <Input
+                    id="check-date-rta"
+                    type="date"
+                    value={checkDueDateInput}
+                    onChange={(e) => setCheckDueDateInput(e.target.value)}
+                    className="font-mono"
+                  />
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 font-mono text-[11px]"
+                      onClick={() =>
+                        setCheckDueDateInput(addMonthsIso(null, 12))
+                      }
+                    >
+                      +1 година от днес
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="check-notes-rta">{t("notesLabel")}</Label>
+                  <Input
+                    id="check-notes-rta"
+                    value={checkNotesInput}
+                    onChange={(e) => setCheckNotesInput(e.target.value)}
+                    placeholder="напр. ГТП стикер №..., Екогрупа 4"
+                    maxLength={240}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {/* Casco, Fire Extinguisher, Vehicle Tax */}
+            {checkingSlot === "casco" ||
+            checkingSlot === "fire_extinguisher" ||
+            checkingSlot === "vehicle_tax" ? (
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-border bg-secondary/30 p-3.5">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {checkingSlot === "casco"
+                      ? t("cascoCheckDesc")
+                      : checkingSlot === "fire_extinguisher"
+                        ? t("extinguisherCheckDesc")
+                        : t("taxCheckDesc")}
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <Label htmlFor="check-date-misc">{t("expiryDateLabel")}</Label>
+                  <Input
+                    id="check-date-misc"
+                    type="date"
+                    value={checkDueDateInput}
+                    onChange={(e) => setCheckDueDateInput(e.target.value)}
+                    className="font-mono"
+                  />
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[11px] text-muted-foreground">
+                      {t("quickAddLabel")}:
+                    </span>
+                    {checkingSlot === "vehicle_tax" ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 font-mono text-[11px]"
+                          onClick={() => {
+                            const y = new Date().getFullYear();
+                            setCheckDueDateInput(`${y}-06-30`);
+                          }}
+                        >
+                          30 юни (-5%)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 font-mono text-[11px]"
+                          onClick={() => {
+                            const y = new Date().getFullYear();
+                            setCheckDueDateInput(`${y}-10-31`);
+                          }}
+                        >
+                          31 октомври (краен)
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {checkingSlot === "casco" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 font-mono text-[11px]"
+                            onClick={() =>
+                              setCheckDueDateInput(
+                                addMonthsIso(checkDueDateInput, 3)
+                              )
+                            }
+                          >
+                            +3 мес.
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 font-mono text-[11px]"
+                          onClick={() =>
+                            setCheckDueDateInput(
+                              addMonthsIso(checkDueDateInput, 12)
+                            )
+                          }
+                        >
+                          +1 година
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="check-notes-misc">{t("notesLabel")}</Label>
+                  <Input
+                    id="check-notes-misc"
+                    value={checkNotesInput}
+                    onChange={(e) => setCheckNotesInput(e.target.value)}
+                    placeholder={t("notesPlaceholder")}
+                    maxLength={240}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-xl border border-primary/25 bg-primary/[0.08] p-3 text-xs text-foreground">
+              <div className="flex items-center gap-2 font-semibold">
+                <BellRing className="h-3.5 w-3.5 text-primary" />
+                <span>{t("autoAlertTitle")}</span>
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                {t("autoAlertDesc")}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCheckModalOpen(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="gradient"
+              disabled={saving || checkingLoading || !checkDueDateInput}
+              onClick={() => void handleApplyCheckResult()}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {tCommon("saving")}
+                </>
+              ) : checkingSlot === "vignette" && bgtollResult?.found ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  {t("addVignetteBtn")}
+                </>
+              ) : (
+                t("applyDateBtn")
               )}
             </Button>
           </DialogFooter>
