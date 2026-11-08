@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Polished Light Mode — High WCAG AA Contrast */
+    --background: 220 33% 98%;
+    --foreground: 225 45% 9%;
+
+    --surface: 0 0% 100%;
+    --surface-elevated: 220 28% 96%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 225 45% 9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 45% 9%;
+
+    /* Electric Blue Primary (WCAG AA compliant on white & dark) */
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 24% 93%;
+    --secondary-foreground: 225 39% 14%;
+
+    --muted: 220 22% 94%;
+    --muted-foreground: 220 15% 38%;
+
+    /* Vivid Violet Accent */
+    --accent: 258 85% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Warm Orange Alert / High-Urgency Accent */
+    --warning: 24 94% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 78% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 87%;
+    --input: 220 20% 87%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.875rem;
+  }
+
+  .dark {
+    /* Signature Deep Navy / Near-Black (#0A0E1A = hsl(225 44% 7%)) */
+    --background: 225 44% 7%;
+    --foreground: 216 33% 97%;
+
+    --surface: 224 41% 10%;
+    --surface-elevated: 224 36% 13%;
+
+    --card: 224 41% 10%;
+    --card-foreground: 216 33% 97%;
+
+    --popover: 224 42% 9%;
+    --popover-foreground: 216 33% 97%;
+
+    /* Electric Blue */
+    --primary: 217 91% 60%;
+    --primary-foreground: 225 44% 7%;
+
+    --secondary: 224 32% 15%;
+    --secondary-foreground: 216 33% 96%;
+
+    --muted: 224 30% 14%;
+    --muted-foreground: 218 18% 69%;
+
+    /* Violet */
+    --accent: 258 90% 66%;
+    --accent-foreground: 216 33% 98%;
+
+    /* Warm Orange */
+    --warning: 25 95% 55%;
+    --warning-foreground: 225 44% 7%;
+
+    --destructive: 0 82% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 223 28% 18%;
+    --input: 223 28% 18%;
+    --ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "locl";
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-primary/25 selection:text-foreground;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-card/75 dark:bg-card/65 backdrop-blur-xl border border-slate-900/[0.08] dark:border-white/[0.08] shadow-sm dark:shadow-glass;
+  }
+
+  .glass-panel {
+    @apply bg-background/80 dark:bg-[#0A0E1A]/80 backdrop-blur-xl border-b border-slate-900/[0.08] dark:border-white/[0.08];
+  }
+
+  .text-gradient-veltrox {
+    @apply bg-gradient-to-r from-blue-500 via-indigo-400 to-violet-500 bg-clip-text text-transparent;
+  }
+
+  .bg-grid-subtle {
+    background-size: 40px 40px;
+    background-image:
+      linear-gradient(to right, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

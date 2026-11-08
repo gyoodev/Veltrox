@@ -1,0 +1,391 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { Camera, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getFirebaseClient } from "@/lib/firebase/client";
+import {
+  type VehicleFormValues,
+  vehicleFormSchema,
+} from "@/lib/validators/car-diary";
+import { FUEL_TYPES, type FuelType, type Vehicle } from "@/types/domain";
+
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+];
+
+interface VehicleFormDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  ownerUid: string;
+  editingVehicle?: Vehicle | null;
+  onSaved: (vehicle: Vehicle) => void;
+}
+
+export function VehicleFormDialog({
+  open,
+  onOpenChange,
+  ownerUid,
+  editingVehicle = null,
+  onSaved,
+}: VehicleFormDialogProps) {
+  const t = useTranslations("carDiary.cars");
+  const tFuel = useTranslations("carDiary.fuelTypes");
+  const tVal = useTranslations("validation");
+  const tCommon = useTranslations("common");
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const form = useForm<VehicleFormValues>({
+    resolver: zodResolver(vehicleFormSchema),
+    defaultValues: {
+      make: editingVehicle?.make ?? "",
+      model: editingVehicle?.model ?? "",
+      year: editingVehicle?.year ?? new Date().getFullYear(),
+      plateNumber: editingVehicle?.plateNumber ?? "",
+      vin: editingVehicle?.vin ?? "",
+      fuelType: editingVehicle?.fuelType ?? "petrol",
+      currentMileageKm: editingVehicle?.currentMileageKm ?? 0,
+      photoUrl: editingVehicle?.photoUrl ?? null,
+      photoStoragePath: editingVehicle?.photoStoragePath ?? null,
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        make: editingVehicle?.make ?? "",
+        model: editingVehicle?.model ?? "",
+        year: editingVehicle?.year ?? new Date().getFullYear(),
+        plateNumber: editingVehicle?.plateNumber ?? "",
+        vin: editingVehicle?.vin ?? "",
+        fuelType: editingVehicle?.fuelType ?? "petrol",
+        currentMileageKm: editingVehicle?.currentMileageKm ?? 0,
+        photoUrl: editingVehicle?.photoUrl ?? null,
+        photoStoragePath: editingVehicle?.photoStoragePath ?? null,
+      });
+    }
+  }, [editingVehicle, form, open]);
+
+  const photoPreview = form.watch("photoUrl");
+
+  const translateErr = (key: string | undefined): string | null => {
+    if (!key) return null;
+    try {
+      return tVal(key as Parameters<typeof tVal>[0]);
+    } catch {
+      return key;
+    }
+  };
+
+  const handlePhotoUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      toast.error(tVal("fileRequired"));
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      toast.error("Max 8 MB");
+      return;
+    }
+
+    const client = getFirebaseClient();
+    if (!client) return;
+
+    setUploadingPhoto(true);
+    try {
+      const ext =
+        file.name
+          .split(".")
+          .pop()
+          ?.replace(/[^a-zA-Z0-9]/g, "") || "webp";
+      const folderSegment = editingVehicle?.id ?? "cover";
+      const storagePath = `vehicles/${ownerUid}/${folderSegment}/photo-${Date.now()}.${ext}`;
+      const storageRef = ref(client.storage, storagePath);
+
+      await uploadBytes(storageRef, file, {
+        contentType: file.type,
+        cacheControl: "public,max-age=86400",
+      });
+      const url = await getDownloadURL(storageRef);
+
+      form.setValue("photoUrl", url, { shouldDirty: true });
+      form.setValue("photoStoragePath", storagePath, { shouldDirty: true });
+    } catch {
+      toast.error("Photo upload failed.");
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const onSubmit = async (values: VehicleFormValues) => {
+    const endpoint = editingVehicle
+      ? `/api/vehicles/${editingVehicle.id}`
+      : "/api/vehicles";
+    const method = editingVehicle ? "PATCH" : "POST";
+
+    const response = await fetch(endpoint, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+
+    if (!response.ok) {
+      toast.error("Failed to save vehicle.");
+      return;
+    }
+
+    const json = (await response.json()) as { vehicle: Vehicle };
+    toast.success(t("savedToast"));
+    onSaved(json.vehicle);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {editingVehicle ? t("editVehicle") : t("addVehicle")}
+          </DialogTitle>
+          <DialogDescription>{t("pageSubtitle")}</DialogDescription>
+        </DialogHeader>
+
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="space-y-4 pt-1"
+          noValidate
+        >
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="veh-make">{t("make")}</Label>
+              <Input
+                id="veh-make"
+                placeholder={t("makePlaceholder")}
+                {...form.register("make")}
+              />
+              {form.formState.errors.make ? (
+                <p className="text-xs text-destructive">
+                  {translateErr(form.formState.errors.make.message)}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="veh-model">{t("model")}</Label>
+              <Input
+                id="veh-model"
+                placeholder={t("modelPlaceholder")}
+                {...form.register("model")}
+              />
+              {form.formState.errors.model ? (
+                <p className="text-xs text-destructive">
+                  {translateErr(form.formState.errors.model.message)}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="veh-plate">{t("plate")}</Label>
+              <Input
+                id="veh-plate"
+                placeholder={t("platePlaceholder")}
+                className="font-mono uppercase"
+                {...form.register("plateNumber")}
+              />
+              {form.formState.errors.plateNumber ? (
+                <p className="text-xs text-destructive">
+                  {translateErr(form.formState.errors.plateNumber.message)}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="veh-year">{t("year")}</Label>
+              <Input
+                id="veh-year"
+                type="number"
+                className="font-mono"
+                {...form.register("year", { valueAsNumber: true })}
+              />
+              {form.formState.errors.year ? (
+                <p className="text-xs text-destructive">
+                  {translateErr(form.formState.errors.year.message)}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>{t("fuelType")}</Label>
+              <Controller
+                control={form.control}
+                name="fuelType"
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={(v) => field.onChange(v as FuelType)}
+                  >
+                    <SelectTrigger aria-label={t("fuelType")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FUEL_TYPES.map((ft) => (
+                        <SelectItem key={ft} value={ft}>
+                          {tFuel(ft)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="veh-mileage">{t("currentMileage")}</Label>
+              <Input
+                id="veh-mileage"
+                type="number"
+                min={0}
+                className="font-mono"
+                {...form.register("currentMileageKm", { valueAsNumber: true })}
+              />
+              {form.formState.errors.currentMileageKm ? (
+                <p className="text-xs text-destructive">
+                  {translateErr(form.formState.errors.currentMileageKm.message)}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="veh-vin">{t("vin")}</Label>
+            <Input
+              id="veh-vin"
+              maxLength={17}
+              placeholder={t("vinPlaceholder")}
+              className="font-mono uppercase"
+              {...form.register("vin")}
+            />
+            {form.formState.errors.vin ? (
+              <p className="text-xs text-destructive">
+                {translateErr(form.formState.errors.vin.message)}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <Label>{t("vehiclePhoto")}</Label>
+            <div className="flex flex-wrap items-center gap-3">
+              {photoPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photoPreview}
+                  alt="Vehicle preview"
+                  className="h-16 w-24 rounded-xl border border-border object-cover"
+                />
+              ) : null}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={uploadingPhoto}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploadingPhoto ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t("uploadingPhoto")}
+                  </>
+                ) : (
+                  <>
+                    <Camera className="h-4 w-4" />
+                    {t("uploadPhoto")}
+                  </>
+                )}
+              </Button>
+              {photoPreview ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    form.setValue("photoUrl", null);
+                    form.setValue("photoStoragePath", null);
+                  }}
+                >
+                  {t("removePhoto")}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              type="submit"
+              variant="gradient"
+              disabled={form.formState.isSubmitting || uploadingPhoto}
+            >
+              {form.formState.isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {tCommon("saving")}
+                </>
+              ) : (
+                tCommon("save")
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+

@@ -1,0 +1,24 @@
+import type { MetadataRoute } from "next";
+
+export default function robots(): MetadataRoute.Robots {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  return {
+    rules: [
+      {
+        userAgent: "*",
+        allow: [
+          "/",
+          "/garages",
+          "/garages/",
+          "/login",
+          "/register",
+          "/privacy",
+          "/terms",
+        ],
+        disallow: ["/app/", "/garage/", "/admin/", "/api/", "/status/"],
+      },
+    ],
+    sitemap: `${appUrl}/sitemap.xml`,
+  };
+}

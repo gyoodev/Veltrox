@@ -1,0 +1,273 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // Helper Functions — Custom Claims & Multi-Tenant Role Enforcement
+    // =========================================================================
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function claimRole() {
+      return isSignedIn() && ('role' in request.auth.token)
+        ? request.auth.token.role
+        : null;
+    }
+
+    function isAdmin() {
+      return claimRole() == 'ADMIN';
+    }
+
+    function isCarOwner() {
+      return claimRole() == 'USER';
+    }
+
+    function isApprovedGarageOwner() {
+      return claimRole() == 'GARAGE_OWNER'
+        && ('garageStatus' in request.auth.token)
+        && request.auth.token.garageStatus == 'approved';
+    }
+
+    // Checks whether the caller owns the garage or is an active staff mechanic
+    function isGarageMember(garageId) {
+      return isSignedIn()
+        && garageId is string
+        && (
+          (isApprovedGarageOwner() && request.auth.token.garageId == garageId)
+          || (
+            exists(/databases/$(database)/documents/garageStaff/$(garageId + '_' + request.auth.uid))
+            && get(/databases/$(database)/documents/garageStaff/$(garageId + '_' + request.auth.uid)).data.active == true
+          )
+        );
+    }
+
+    function isGarageManager(garageId) {
+      return isSignedIn()
+        && garageId is string
+        && isApprovedGarageOwner()
+        && request.auth.token.garageId == garageId
+        && !('isStaff' in request.auth.token && request.auth.token.isStaff == true);
+    }
+
+    // Validates the editable subset of fields a user can update on their own profile.
+    // Users can NEVER self-assign role, garageStatus, garageId, suspended, or uid.
+    function validUserSelfUpdate() {
+      let allowedKeys = [
+        'displayName',
+        'phone',
+        'avatarUrl',
+        'avatarStoragePath',
+        'language',
+        'notificationPreferences',
+        'emailVerified',
+        'updatedAt'
+      ];
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.garageStatus == resource.data.garageStatus
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 2
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.language in ['bg', 'en']
+        && (request.resource.data.phone == null
+          || (request.resource.data.phone is string && request.resource.data.phone.size() <= 24))
+        && request.resource.data.notificationPreferences is map;
+    }
+
+    function validUserSelfCreate(userId) {
+      return isSelf(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.role in ['USER', 'GARAGE_OWNER']
+        && (
+          (request.resource.data.role == 'USER' && request.resource.data.garageStatus == 'none')
+          || (request.resource.data.role == 'GARAGE_OWNER' && request.resource.data.garageStatus == 'pending')
+        )
+        && request.resource.data.suspended == false
+        && request.resource.data.language in ['bg', 'en'];
+    }
+
+    // =========================================================================
+    // 1. users/{userId}
+    // =========================================================================
+    match /users/{userId} {
+      allow read: if isSelf(userId) || isAdmin();
+      allow create: if validUserSelfCreate(userId) || isAdmin();
+      allow update: if (isSelf(userId) && validUserSelfUpdate()) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 2. garages/{garageId} — Public Directory Read (Approved), Owner/Admin Write
+    // =========================================================================
+    match /garages/{garageId} {
+      allow read: if resource.data.status == 'approved'
+        || (isSignedIn() && resource.data.ownerUid == request.auth.uid)
+        || isGarageMember(garageId)
+        || isAdmin();
+      allow create: if isApprovedGarageOwner()
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isGarageManager(garageId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 3. garageStaff/{staffDocId} — Deterministic ID: {garageId}_{staffUid}
+    // =========================================================================
+    match /garageStaff/{staffDocId} {
+      allow read: if isSignedIn() && (
+        resource.data.uid == request.auth.uid
+        || isGarageManager(resource.data.garageId)
+        || isAdmin()
+      );
+      allow create, update, delete: if isGarageManager(
+        request.resource != null ? request.resource.data.garageId : resource.data.garageId
+      ) || isAdmin();
+    }
+
+    // =========================================================================
+    // 4. User-Owned Collections (Every record carries `ownerId`)
+    // =========================================================================
+    match /vehicles/{vehicleId} {
+      allow read: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || (resource.data.linkedGarageIds is list && isApprovedGarageOwner() && request.auth.token.garageId in resource.data.linkedGarageIds)
+        || isAdmin();
+      allow create: if isSignedIn()
+        && isCarOwner()
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || isAdmin();
+    }
+
+    match /diaryEntries/{entryId} {
+      allow read: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || (resource.data.garageId != null && isGarageMember(resource.data.garageId))
+        || isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update: if (isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId)
+        || isAdmin();
+      allow delete: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || isAdmin();
+    }
+
+    match /documents/{documentId} {
+      allow read: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if (isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId) || isAdmin();
+      allow delete: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+    }
+
+    // =========================================================================
+    // 5. Garage-Owned Collections (Every record carries `garageId`)
+    // =========================================================================
+    match /customers/{customerId} {
+      allow read: if isGarageMember(resource.data.garageId) || isAdmin();
+      allow create: if isGarageMember(request.resource.data.garageId);
+      allow update: if (isGarageMember(resource.data.garageId)
+        && request.resource.data.garageId == resource.data.garageId) || isAdmin();
+      allow delete: if isGarageManager(resource.data.garageId) || isAdmin();
+    }
+
+    match /workOrders/{workOrderId} {
+      allow read: if isGarageMember(resource.data.garageId)
+        || (isSignedIn() && resource.data.linkedOwnerId == request.auth.uid)
+        || isAdmin();
+      allow create: if isGarageMember(request.resource.data.garageId);
+      allow update: if (isGarageMember(resource.data.garageId)
+        && request.resource.data.garageId == resource.data.garageId) || isAdmin();
+      allow delete: if isGarageManager(resource.data.garageId) || isAdmin();
+    }
+
+    // Whitelisted public status projection (no phone, email, VIN, raw plate, or internal notes)
+    match /workOrderPublicStatus/{publicToken} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if false; // Written exclusively by server/Admin SDK
+    }
+
+    match /workOrderItems/{itemId} {
+      allow read: if isGarageMember(resource.data.garageId)
+        || (isSignedIn() && resource.data.linkedOwnerId == request.auth.uid)
+        || isAdmin();
+      allow create: if isGarageMember(request.resource.data.garageId);
+      allow update, delete: if isGarageMember(resource.data.garageId) || isAdmin();
+    }
+
+    match /tyreSets/{tyreSetId} {
+      allow read: if isGarageMember(resource.data.garageId) || isAdmin();
+      allow create: if isGarageMember(request.resource.data.garageId);
+      allow update: if (isGarageMember(resource.data.garageId)
+        && request.resource.data.garageId == resource.data.garageId) || isAdmin();
+      allow delete: if isGarageMember(resource.data.garageId) || isAdmin();
+    }
+
+    // =========================================================================
+    // 6. Shared Multi-Tenant Collections (`ownerId` or `garageId`)
+    // =========================================================================
+    match /reminders/{reminderId} {
+      allow read: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || (resource.data.garageId != null && isGarageMember(resource.data.garageId))
+        || isAdmin();
+      allow create: if (isSignedIn() && request.resource.data.ownerId == request.auth.uid)
+        || (request.resource.data.garageId != null && isGarageMember(request.resource.data.garageId));
+      allow update, delete: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || (resource.data.garageId != null && isGarageMember(resource.data.garageId))
+        || isAdmin();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || isGarageMember(resource.data.garageId)
+        || isAdmin();
+      allow create: if (isSignedIn() && request.resource.data.ownerId == request.auth.uid)
+        || isGarageMember(request.resource.data.garageId);
+      allow update: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || isGarageMember(resource.data.garageId)
+        || isAdmin();
+      allow delete: if isGarageManager(resource.data.garageId) || isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if (isSignedIn() && resource.data.ownerId == request.auth.uid)
+        || (resource.data.garageId != null && isGarageMember(resource.data.garageId))
+        || isAdmin();
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt', 'status']);
+      allow create, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // 7. platformConfig/{docId} — Public CMS Read (FAQ & Banner), Admin Write
+    // =========================================================================
+    match /platformConfig/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // =========================================================================
+    // 8. auditLogs/{logId} — Immutable, Admin-Readable, Server-Written Only
+    // =========================================================================
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

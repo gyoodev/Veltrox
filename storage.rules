@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.role == 'ADMIN';
+    }
+
+    function isImageUnder5MB() {
+      return request.resource != null
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|avif)');
+    }
+
+    function isAttachmentUnder10MB() {
+      return request.resource != null
+        && request.resource.size <= 10 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/(jpeg|png|webp|avif)')
+          || request.resource.contentType == 'application/pdf'
+        );
+    }
+
+    // User profile avatars: strict UID path ownership
+    match /users/{userId}/avatar/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && isImageUnder5MB();
+      allow delete: if (isSignedIn() && request.auth.uid == userId) || isAdmin();
+    }
+
+    // User vehicle photos, diary receipts & document vault
+    match /vehicles/{ownerId}/{vehicleId}/{allPaths=**} {
+      allow read: if (isSignedIn() && request.auth.uid == ownerId) || isAdmin();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == ownerId
+        && isAttachmentUnder10MB();
+      allow delete: if (isSignedIn() && request.auth.uid == ownerId) || isAdmin();
+    }
+
+    // Garage branding & work order drop-off photos
+    match /garages/{garageId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.token.role == 'GARAGE_OWNER'
+        && request.auth.token.garageStatus == 'approved'
+        && request.auth.token.garageId == garageId
+        && isAttachmentUnder10MB();
+      allow delete: if (
+        isSignedIn()
+        && request.auth.token.role == 'GARAGE_OWNER'
+        && request.auth.token.garageId == garageId
+      ) || isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

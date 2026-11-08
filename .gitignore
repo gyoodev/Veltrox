@@ -78,6 +78,8 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+*firebase-adminsdk*.json
+serviceAccount*.json
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -86,6 +88,11 @@ web_modules/
 # Next.js build output
 .next
 out
+.vercel
+next-env.d.ts
+firebase-debug.log*
+firestore-debug.log*
+functions/lib/
 
 # Nuxt.js build / generate output
 .nuxt
