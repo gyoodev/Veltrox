@@ -20,6 +20,7 @@ import {
   Pencil,
   Plus,
   Search,
+  ShieldCheck,
   Sparkles,
   Trash2,
   Wrench,
@@ -36,6 +37,7 @@ import { ExpenseCharts } from "@/components/car-diary/expense-charts";
 import { RemindersListClient } from "@/components/car-diary/reminders-list-client";
 import { VehicleComplianceTracker } from "@/components/car-diary/vehicle-compliance-tracker";
 import { VehicleFormDialog } from "@/components/car-diary/vehicle-form-dialog";
+import { VinCheckDialog } from "@/components/car-diary/vin-check-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -104,6 +106,7 @@ export function VehicleDetailClient({
     useState<Reminder[]>(initialReminders);
 
   const [editVehicleOpen, setEditVehicleOpen] = useState(false);
+  const [vinCheckOpen, setVinCheckOpen] = useState(false);
   const [mileageInput, setMileageInput] = useState<string>(
     String(initialVehicle.currentMileageKm)
   );
@@ -390,10 +393,25 @@ export function VehicleDetailClient({
                     {tFuel(vehicle.fuelType)}
                   </Badge>
                   {vehicle.vin ? (
-                    <span className="rounded-lg border border-border bg-secondary/50 px-2.5 py-0.5 font-mono text-[11px] text-foreground">
-                      VIN: {vehicle.vin}
-                    </span>
-                  ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setVinCheckOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/50 px-2.5 py-0.5 font-mono text-[11px] text-foreground hover:border-primary/40 hover:bg-secondary/80 transition-colors cursor-pointer"
+                      title={tCars("checkVinMileageBtn")}
+                    >
+                      <ShieldCheck className="h-3 w-3 text-primary" />
+                      <span>VIN: {vehicle.vin}</span>
+                      <ExternalLink className="h-2.5 w-2.5 text-muted-foreground ml-0.5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setVinCheckOpen(true)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors cursor-pointer"
+                    >
+                      + {tCars("addVinPrompt")}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -439,22 +457,35 @@ export function VehicleDetailClient({
                   className="font-mono"
                 />
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={
-                  savingMileage ||
-                  Number(mileageInput) === vehicle.currentMileageKm
-                }
-                onClick={() => void handleQuickMileageUpdate()}
-              >
-                {savingMileage ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Gauge className="h-4 w-4 text-primary" />
-                )}
-                {tCars("quickMileageSave")}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={
+                    savingMileage ||
+                    Number(mileageInput) === vehicle.currentMileageKm
+                  }
+                  onClick={() => void handleQuickMileageUpdate()}
+                  className="h-10 text-xs font-semibold"
+                >
+                  {savingMileage ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Gauge className="h-4 w-4 text-primary" />
+                  )}
+                  {tCars("quickMileageSave")}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setVinCheckOpen(true)}
+                  className="h-10 text-xs gap-1.5 border-blue-500/35 text-blue-400 hover:bg-blue-500/10 font-semibold"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>{tCars("checkVinMileageBtn")}</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -743,6 +774,17 @@ export function VehicleDetailClient({
         defaultVehicleId={vehicle.id}
         editingEntry={editingEntry}
         onSaved={handleEntrySaved}
+      />
+      {/* Official VIN & Odometer Check Modal */}
+      <VinCheckDialog
+        open={vinCheckOpen}
+        onOpenChange={setVinCheckOpen}
+        vehicle={vehicle}
+        onVehicleUpdated={(updated) => {
+          setVehicle(updated);
+          setMileageInput(String(updated.currentMileageKm));
+          router.refresh();
+        }}
       />
     </div>
   );

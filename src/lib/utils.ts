@@ -44,5 +44,9 @@ export function formatDate(
   }).format(date);
 }
 
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat().format(value);
+}
+
 export const formatDateShort = formatDate;
 

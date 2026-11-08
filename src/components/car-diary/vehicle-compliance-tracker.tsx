@@ -11,6 +11,7 @@ import {
   Copy,
   ExternalLink,
   Flame,
+  Gauge,
   Landmark,
   Loader2,
   Pencil,
@@ -1233,6 +1234,22 @@ export function VehicleComplianceTracker({
                         <span>VIN: {activeVehicle.vin}</span>
                       </Button>
                     ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      className="h-8 text-xs gap-1.5 border-blue-500/35 text-blue-400 hover:bg-blue-500/10 font-medium"
+                    >
+                      <a
+                        href="https://public-eis.rta.government.bg/public-vehicle-check/vin-check"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Gauge className="h-3.5 w-3.5" />
+                        <span>Провери километри по VIN</span>
+                      </a>
+                    </Button>
                     <Button
                       type="button"
                       variant="secondary"
