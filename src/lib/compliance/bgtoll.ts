@@ -1,21 +1,25 @@
 /**
  * BGTOLL Electronic Vignette Verification Engine (Bulgaria)
  *
- * Bulgarian license plates only use glyphs present in both Cyrillic and Latin alphabets:
- * A, B, E, K, M, H, O, P, C, T, Y, X.
- *
- * The official public BGTOLL check service expects normalized uppercase ASCII characters.
+ * Official BGTOLL API specification (Swagger v2):
+ * Base URL: https://check.bgtoll.bg
+ * Documentation: https://check.bgtoll.bg/v2/api-docs
+ * Operation: checkVignetteUsingGET /check/vignette/plate/{countryCode}/{licensePlateNumber}
+ *            checkVignettesUsingGET /check/vignette/all/plate/{countryCode}/{licensePlateNumber}
  */
 
 export interface BgTollVignetteRecord {
   vignetteNumber: string;
   validDateFrom: string;
   validDateTo: string;
+  validDateToFormatted?: string;
   status: "ACTIVE" | "EXPIRED" | "UNUSED" | string;
-  price?: string | number;
+  statusBoolean?: boolean;
+  price?: number;
   currency?: string;
-  vehicleCategory?: string;
-  productType?: string;
+  vehicleClass?: string;
+  vehicleType?: string;
+  emissionsClass?: string;
   licensePlate: string;
   countryCode: string;
 }
@@ -29,6 +33,34 @@ export interface BgTollCheckResponse {
   vignette: BgTollVignetteRecord | null;
   message?: string;
   checkedAt: string;
+}
+
+interface RawBgTollVignette {
+  licensePlateNumber?: string;
+  country?: string;
+  exempt?: boolean;
+  vignetteNumber?: string;
+  vehicleClass?: string;
+  vehicleClassCode?: string;
+  vehicleType?: string;
+  vehicleTypeCode?: string;
+  emissionsClass?: string;
+  emissionsClassCode?: string;
+  validityDateFrom?: string;
+  validityDateFromFormated?: string;
+  validityDateTo?: string;
+  validityDateToFormated?: string;
+  issueDate?: string;
+  issueDateFormated?: string;
+  price?: number;
+  currency?: string;
+  status?: string;
+  statusBoolean?: boolean;
+  whitelist?: boolean;
+  // Fallbacks:
+  validDateTo?: string;
+  validDateFrom?: string;
+  productType?: string;
 }
 
 const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
@@ -60,7 +92,7 @@ const CYRILLIC_TO_LATIN_MAP: Record<string, string> = {
 
 /**
  * Normalizes Bulgarian vehicle license plate string to clean uppercase Latin ASCII
- * suitable for the BGTOLL REST API (e.g. "СВ 1234 АВ" -> "CB1234AB").
+ * suitable for the BGTOLL REST API (e.g. "СВ 5237 НН" -> "CB5237HH").
  */
 export function normalizePlateForBgToll(rawPlate: string): string {
   if (!rawPlate) return "";
@@ -105,7 +137,7 @@ export async function checkBgTollVignette(
     const response = await fetch(endpoint, {
       method: "GET",
       headers: {
-        Accept: "application/json",
+        Accept: "application/json, text/plain, */*",
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 VeltroxAutoCheck/1.0",
       },
@@ -130,50 +162,53 @@ export async function checkBgTollVignette(
 
     const json = (await response.json()) as {
       ok?: boolean;
-      vignette?: {
-        vignetteNumber?: string;
-        validDateFrom?: string;
-        validDateTo?: string;
-        status?: string;
-        productType?: string;
-        price?: string | number;
-        currency?: string;
-        vehicleCategory?: string;
-      } | null;
-      vignettes?: Array<{
-        vignetteNumber?: string;
-        validDateFrom?: string;
-        validDateTo?: string;
-        status?: string;
-        productType?: string;
-        price?: string | number;
-        currency?: string;
-        vehicleCategory?: string;
-      }>;
+      vignette?: RawBgTollVignette | RawBgTollVignette[] | null;
+      vignettes?: RawBgTollVignette[];
       status?: {
         code?: number;
         message?: string;
       };
     };
 
-    // 1. Direct active vignette property
-    let candidate = json.vignette ?? null;
+    let candidate: RawBgTollVignette | null = null;
 
-    // 2. In some versions, an array of vignettes is returned
-    if (!candidate && Array.isArray(json.vignettes) && json.vignettes.length > 0) {
+    // Handle both single object and list responses as defined in BGTOLL Swagger:
+    if (Array.isArray(json.vignette) && json.vignette.length > 0) {
       candidate =
-        json.vignettes.find((v) => v.status?.toUpperCase() === "ACTIVE") ??
+        json.vignette.find(
+          (v) =>
+            v.statusBoolean === true ||
+            v.status?.toLowerCase().includes("актив") ||
+            v.status?.toUpperCase() === "ACTIVE"
+        ) ??
+        json.vignette[0] ??
+        null;
+    } else if (json.vignette && typeof json.vignette === "object") {
+      candidate = json.vignette as RawBgTollVignette;
+    } else if (Array.isArray(json.vignettes) && json.vignettes.length > 0) {
+      candidate =
+        json.vignettes.find(
+          (v) =>
+            v.statusBoolean === true ||
+            v.status?.toLowerCase().includes("актив") ||
+            v.status?.toUpperCase() === "ACTIVE"
+        ) ??
         json.vignettes[0] ??
         null;
     }
 
-    if (candidate && candidate.validDateTo) {
-      // Validate date
-      const validToSlice = candidate.validDateTo.slice(0, 10);
-      const isExpired = Date.parse(candidate.validDateTo) < Date.now();
+    const rawValidTo = candidate?.validityDateTo || candidate?.validDateTo;
+    const rawValidFrom =
+      candidate?.validityDateFrom || candidate?.validDateFrom || now;
+
+    if (candidate && rawValidTo) {
+      const validToSlice = rawValidTo.slice(0, 10);
+      const isExpired = Date.parse(rawValidTo) < Date.now();
       const isActive =
+        candidate.statusBoolean === true ||
+        candidate.status?.toLowerCase().includes("актив") ||
         candidate.status?.toUpperCase() === "ACTIVE" ||
-        (!isExpired && Boolean(candidate.validDateTo));
+        (!isExpired && Boolean(rawValidTo));
 
       return {
         ok: true,
@@ -183,15 +218,18 @@ export async function checkBgTollVignette(
         normalizedPlate: normalized,
         vignette: {
           vignetteNumber: candidate.vignetteNumber || "Няма номер",
-          validDateFrom: candidate.validDateFrom || now,
+          validDateFrom: rawValidFrom,
           validDateTo: validToSlice,
+          validDateToFormatted: candidate.validityDateToFormated,
           status: isActive ? "ACTIVE" : candidate.status || "EXPIRED",
+          statusBoolean: isActive,
           price: candidate.price,
           currency: candidate.currency || "BGN",
-          vehicleCategory: candidate.vehicleCategory || "K1",
-          productType: candidate.productType || "Електронна винетка",
-          licensePlate: normalized,
-          countryCode: "BG",
+          vehicleClass: candidate.vehicleClass || "Превозно средство <= 3,5 тона",
+          vehicleType: candidate.vehicleType || "Превозно средство <= 3,5 тона",
+          emissionsClass: candidate.emissionsClass,
+          licensePlate: candidate.licensePlateNumber || normalized,
+          countryCode: candidate.country || "BG",
         },
         message: isActive
           ? `Намерена е активна винетка до ${validToSlice}.`
@@ -228,4 +266,3 @@ export async function checkBgTollVignette(
     };
   }
 }
-

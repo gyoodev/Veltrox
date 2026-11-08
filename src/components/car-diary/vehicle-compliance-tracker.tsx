@@ -419,7 +419,7 @@ export function VehicleComplianceTracker({
             setCheckDueDateInput(data.vignette.validDateTo);
             setCheckNotesInput(
               `Е-винетка № ${data.vignette.vignetteNumber} (${
-                data.vignette.productType || "BGTOLL"
+                data.vignette.vehicleType || data.vignette.vehicleClass || "BGTOLL"
               })`
             );
           }
@@ -869,16 +869,26 @@ export function VehicleComplianceTracker({
                           {t("vignetteTypeLabel")}
                         </span>
                         <span className="font-semibold text-foreground truncate block">
-                          {bgtollResult.vignette.productType || "Е-винетка"}
+                          {bgtollResult.vignette.vehicleType ||
+                            bgtollResult.vignette.vehicleClass ||
+                            "Е-винетка"}
                         </span>
                       </div>
                     </div>
 
-                    <div className="mt-2 text-[11px] text-muted-foreground flex items-center justify-between px-0.5">
-                      <span>{t("vignetteNumberLabel")}:</span>
-                      <span className="font-mono font-semibold text-foreground">
-                        {bgtollResult.vignette.vignetteNumber}
+                    <div className="mt-2 text-[11px] text-muted-foreground flex flex-wrap items-center justify-between gap-1 px-0.5">
+                      <span>
+                        {t("vignetteNumberLabel")}:{" "}
+                        <strong className="font-mono text-foreground font-semibold">
+                          {bgtollResult.vignette.vignetteNumber}
+                        </strong>
                       </span>
+                      {bgtollResult.vignette.price ? (
+                        <span className="font-mono font-medium text-emerald-400">
+                          {bgtollResult.vignette.price}{" "}
+                          {bgtollResult.vignette.currency || "EUR"}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
