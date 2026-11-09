@@ -706,10 +706,10 @@ export function VehicleComplianceTracker({
                           <Icon className="h-4 w-4" aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-sm font-bold text-foreground truncate">
+                          <h3 className="text-sm font-bold text-foreground leading-snug break-words">
                             {t(`items.${card.type}`)}
                           </h3>
-                          <p className="text-[11px] text-muted-foreground line-clamp-1 leading-tight">
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 leading-tight mt-0.5">
                             {t(`hints.${card.type}`)}
                           </p>
                         </div>

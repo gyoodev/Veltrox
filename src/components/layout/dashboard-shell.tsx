@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   AlertTriangle,
   BarChart3,
   BellRing,
@@ -253,10 +254,16 @@ export function DashboardShell({
       mobilePrimary: true,
     },
     {
+      href: "/admin/garages",
+      label: tShell("garagesNav"),
+      icon: Wrench,
+      mobilePrimary: true,
+    },
+    {
       href: "/admin/approvals",
       label: tShell("approvalsNav"),
       icon: Building2,
-      mobilePrimary: true,
+      mobilePrimary: false,
     },
     {
       href: "/admin/users",
@@ -265,10 +272,22 @@ export function DashboardShell({
       mobilePrimary: true,
     },
     {
+      href: "/admin/vehicles",
+      label: tShell("vehiclesNav"),
+      icon: Car,
+      mobilePrimary: true,
+    },
+    {
+      href: "/admin/system",
+      label: tShell("systemNav"),
+      icon: Activity,
+      mobilePrimary: true,
+    },
+    {
       href: "/admin/analytics",
       label: tShell("analyticsNav"),
       icon: BarChart3,
-      mobilePrimary: true,
+      mobilePrimary: false,
     },
     {
       href: "/admin/content",
@@ -280,7 +299,7 @@ export function DashboardShell({
       href: "/admin/audit-logs",
       label: tShell("auditNav"),
       icon: FileClock,
-      mobilePrimary: true,
+      mobilePrimary: false,
     },
     {
       href: "/admin/profile",
@@ -454,7 +473,7 @@ export function DashboardShell({
                 variant="outline"
                 size="sm"
                 className={cn(
-                  "h-8 gap-1.5 px-2.5 text-xs font-semibold mr-1 shadow-sm transition-all rounded-xl",
+                  "hidden md:inline-flex h-8 gap-1.5 px-2.5 text-xs font-semibold mr-1 shadow-sm transition-all rounded-xl",
                   isAdminSection
                     ? "border-primary/45 text-primary bg-primary/[0.08] hover:bg-primary/15"
                     : "border-amber-500/50 text-amber-400 bg-amber-500/[0.08] hover:bg-amber-500/15"
@@ -464,18 +483,12 @@ export function DashboardShell({
                   {isAdminSection ? (
                     <>
                       <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
-                      <span className="hidden sm:inline">
-                        {tShell("userPanelBtn")}
-                      </span>
-                      <span className="sm:hidden">Потребителски</span>
+                      <span>{tShell("userPanelBtn")}</span>
                     </>
                   ) : (
                     <>
                       <Shield className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                      <span className="hidden sm:inline">
-                        {tShell("adminPanelBtn")}
-                      </span>
-                      <span className="sm:hidden">Админ</span>
+                      <span>{tShell("adminPanelBtn")}</span>
                     </>
                   )}
                 </Link>
@@ -551,26 +564,42 @@ export function DashboardShell({
                   </>
                 ) : null}
                 {activeProfile.role === "ADMIN" ? (
-                  <>
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin">
-                        <Shield className="h-4 w-4 text-amber-400" />
-                        <span>{tShell("adminPanelBtn")}</span>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/app">
-                        <LayoutDashboard className="h-4 w-4 text-primary" />
-                        <span>{tShell("userPanelBtn")}</span>
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin/content">
-                        <Megaphone className="h-4 w-4" />
-                        {tShell("cmsNav")}
-                      </Link>
-                    </DropdownMenuItem>
-                  </>
+                  <div className="p-1 mb-1">
+                    <Link
+                      href={isAdminSection ? "/app" : "/admin"}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition-all shadow-sm",
+                        isAdminSection
+                          ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                          : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        {isAdminSection ? (
+                          <>
+                            <LayoutDashboard className="h-4 w-4 text-primary" />
+                            <span>{tShell("userPanelBtn")}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Shield className="h-4 w-4 text-amber-400" />
+                            <span>{tShell("adminPanelBtn")}</span>
+                          </>
+                        )}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[9px] px-1.5 py-0 font-mono font-bold",
+                          isAdminSection
+                            ? "border-primary/40 text-primary"
+                            : "border-amber-500/40 text-amber-400"
+                        )}
+                      >
+                        {isAdminSection ? "USER" : "ADMIN"}
+                      </Badge>
+                    </Link>
+                  </div>
                 ) : null}
                 <DropdownMenuItem asChild>
                   <Link href={profileHref}>
@@ -590,6 +619,48 @@ export function DashboardShell({
             </DropdownMenu>
           </div>
         </header>
+
+        {/* Mobile-only Admin Quick-Switch Strip */}
+        {activeProfile.role === "ADMIN" ? (
+          <div className="md:hidden border-b border-border/70 bg-secondary/40 backdrop-blur px-4 py-2 flex items-center justify-between text-xs print:hidden">
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  isAdminSection ? "bg-amber-400 animate-pulse" : "bg-primary"
+                )}
+              />
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {isAdminSection ? "Админ режим" : "Потребителски"}
+              </span>
+            </div>
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className={cn(
+                "h-7 text-xs px-2.5 py-0 rounded-lg font-semibold gap-1.5 shadow-sm transition-all",
+                isAdminSection
+                  ? "border-primary/50 text-primary bg-primary/10 hover:bg-primary/20"
+                  : "border-amber-500/50 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+              )}
+            >
+              <Link href={isAdminSection ? "/app" : "/admin"}>
+                {isAdminSection ? (
+                  <>
+                    <LayoutDashboard className="h-3.5 w-3.5" />
+                    <span>Към Потребителски</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Към Админ панел</span>
+                  </>
+                )}
+              </Link>
+            </Button>
+          </div>
+        ) : null}
 
         <AnnouncementBanner />
 
@@ -634,14 +705,10 @@ export function DashboardShell({
         className="glass-panel fixed inset-x-0 bottom-0 z-30 border-t border-border md:hidden print:hidden"
       >
         <div
-          className={cn(
-            "grid gap-1 px-2 py-1.5",
-            mobileLinks.length === 5
-              ? "grid-cols-5"
-              : mobileLinks.length === 2
-                ? "grid-cols-2"
-                : "grid-cols-3"
-          )}
+          className="grid gap-1 px-2 py-1.5 w-full"
+          style={{
+            gridTemplateColumns: `repeat(${mobileLinks.length}, minmax(0, 1fr))`,
+          }}
         >
           {mobileLinks.map((item) => {
             const Icon = item.icon;
