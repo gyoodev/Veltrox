@@ -270,23 +270,28 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
     if (!res.ok) {
       let errorMsg = "Could not complete garage onboarding.";
       try {
-        const errJson = (await res.json()) as {
-          error?: string;
-          details?: string;
-          issues?: {
-            fieldErrors?: Record<string, string[]>;
-            formErrors?: string[];
+        const text = await res.text();
+        try {
+          const errJson = JSON.parse(text) as {
+            error?: string;
+            details?: string;
+            issues?: {
+              fieldErrors?: Record<string, string[]>;
+              formErrors?: string[];
+            };
           };
-        };
-        if (errJson.error === "VALIDATION_FAILED" && errJson.issues) {
-          const fieldMsgs = Object.entries(errJson.issues.fieldErrors || {})
-            .map(([field, msgs]) => `${field}: ${msgs.join(", ")}`)
-            .join("; ");
-          errorMsg = fieldMsgs || "Грешка при валидация на данните.";
-        } else if (errJson.error) {
-          errorMsg = `Грешка (${res.status}): ${errJson.error}${
-            errJson.details ? ` - ${errJson.details}` : ""
-          }`;
+          if (errJson.error === "VALIDATION_FAILED" && errJson.issues) {
+            const fieldMsgs = Object.entries(errJson.issues.fieldErrors || {})
+              .map(([field, msgs]) => `${field}: ${msgs.join(", ")}`)
+              .join("; ");
+            errorMsg = fieldMsgs || "Грешка при валидация на данните.";
+          } else if (errJson.error) {
+            errorMsg = `Грешка (${res.status}): ${errJson.error}${
+              errJson.details ? ` - ${errJson.details}` : ""
+            }`;
+          }
+        } catch {
+          errorMsg = `Грешка (${res.status}): ${text.slice(0, 120)}`;
         }
       } catch {}
       toast.error(errorMsg);

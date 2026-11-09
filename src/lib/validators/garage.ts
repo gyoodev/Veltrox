@@ -46,7 +46,20 @@ export const garageOnboardingSchema = z.object({
     .array(z.string().trim().min(2).max(60))
     .min(1, "servicesRequired")
     .max(25, "fieldTooLong"),
-  logoUrl: z.string().url().or(z.literal("")).nullish(),
+  logoUrl: z
+    .string()
+    .trim()
+    .refine(
+      (val) =>
+        !val ||
+        val.startsWith("http://") ||
+        val.startsWith("https://") ||
+        val.startsWith("/") ||
+        val.startsWith("data:"),
+      { message: "Invalid logo URL" }
+    )
+    .nullish()
+    .or(z.literal("")),
   logoStoragePath: z.string().max(400).nullish(),
 });
 
