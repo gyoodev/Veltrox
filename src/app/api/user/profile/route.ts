@@ -46,10 +46,14 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 
   const data = parsed.data;
 
-  // Ensure avatar storage path, if supplied, strictly belongs to the caller's UID
+  // Ensure avatar storage path, if supplied, strictly belongs to the caller's UID or valid cloud provider
   if (
     data.avatarStoragePath &&
-    !data.avatarStoragePath.startsWith(`users/${ctx.session.uid}/avatar/`)
+    !data.avatarStoragePath.startsWith(`users/${ctx.session.uid}/avatar/`) &&
+    !data.avatarStoragePath.startsWith("imgbb:") &&
+    !data.avatarStoragePath.startsWith("public/uploads/") &&
+    !data.avatarStoragePath.startsWith("http://") &&
+    !data.avatarStoragePath.startsWith("https://")
   ) {
     return NextResponse.json(
       { error: "FORBIDDEN_STORAGE_PATH" },

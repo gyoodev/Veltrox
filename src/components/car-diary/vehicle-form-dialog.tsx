@@ -257,21 +257,31 @@ export function VehicleFormDialog({
       : "/api/vehicles";
     const method = editingVehicle ? "PATCH" : "POST";
 
-    const response = await fetch(endpoint, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
-    });
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
 
-    if (!response.ok) {
-      toast.error("Failed to save vehicle.");
-      return;
+      if (!response.ok) {
+        const errJson = (await response.json().catch(() => null)) as {
+          error?: string;
+          issues?: unknown;
+        } | null;
+        console.error("Save vehicle failed:", errJson);
+        toast.error("Неуспешно запазване на автомобила.");
+        return;
+      }
+
+      const json = (await response.json()) as { vehicle: Vehicle };
+      toast.success(t("savedToast"));
+      onSaved(json.vehicle);
+      onOpenChange(false);
+    } catch (err) {
+      console.error("Save vehicle request error:", err);
+      toast.error("Възникна грешка при запазване на автомобила.");
     }
-
-    const json = (await response.json()) as { vehicle: Vehicle };
-    toast.success(t("savedToast"));
-    onSaved(json.vehicle);
-    onOpenChange(false);
   };
 
   return (

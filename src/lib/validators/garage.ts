@@ -48,7 +48,7 @@ export const garageOnboardingSchema = z.object({
     .array(z.string().trim().min(2).max(60))
     .min(1, "servicesRequired")
     .max(25, "fieldTooLong"),
-  logoUrl: z.string().url().nullable().optional(),
+  logoUrl: z.string().url().or(z.literal("")).nullable().optional(),
   logoStoragePath: z.string().max(400).nullable().optional(),
 });
 

@@ -60,7 +60,11 @@ export async function PATCH(
   const data = parsed.data;
   if (
     data.photoStoragePath &&
-    !data.photoStoragePath.startsWith(`vehicles/${uid}/`)
+    !data.photoStoragePath.startsWith(`vehicles/${uid}/`) &&
+    !data.photoStoragePath.startsWith("imgbb:") &&
+    !data.photoStoragePath.startsWith("public/uploads/") &&
+    !data.photoStoragePath.startsWith("http://") &&
+    !data.photoStoragePath.startsWith("https://")
   ) {
     return NextResponse.json(
       { error: "FORBIDDEN_STORAGE_PATH" },
