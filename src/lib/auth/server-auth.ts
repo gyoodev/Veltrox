@@ -75,13 +75,66 @@ export async function getCurrentAuthContext(): Promise<AuthenticatedContext | nu
       return null;
     }
 
+    let effectiveGarageStatus = profile.garageStatus;
+    let effectiveGarageId = profile.garageId ?? null;
+
+    if (profile.role === "GARAGE_OWNER") {
+      if (effectiveGarageId) {
+        try {
+          const gSnap = await admin.adminDb
+            .collection("garages")
+            .doc(effectiveGarageId)
+            .get();
+          if (gSnap.exists) {
+            const gData = gSnap.data() as Garage;
+            const mappedStatus =
+              gData.status === "suspended" ? "rejected" : gData.status;
+            if (mappedStatus && mappedStatus !== effectiveGarageStatus) {
+              effectiveGarageStatus = mappedStatus;
+              void userSnap.ref.update({
+                garageStatus: mappedStatus,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("Could not check garage status:", err);
+        }
+      } else {
+        try {
+          const gQuery = await admin.adminDb
+            .collection("garages")
+            .where("ownerUid", "==", decoded.uid)
+            .limit(1)
+            .get();
+          if (!gQuery.empty && gQuery.docs[0]) {
+            const gDoc = gQuery.docs[0];
+            const gData = gDoc.data() as Garage;
+            effectiveGarageId = gDoc.id;
+            const mappedStatus =
+              gData.status === "suspended"
+                ? "rejected"
+                : gData.status || "approved";
+            effectiveGarageStatus = mappedStatus;
+            void userSnap.ref.update({
+              garageId: effectiveGarageId,
+              garageStatus: effectiveGarageStatus,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        } catch (err) {
+          console.warn("Could not find garage by ownerUid:", err);
+        }
+      }
+    }
+
     const authoritativeSession: SessionPayload = {
       uid: decoded.uid,
       email: decoded.email ?? profile.email,
       emailVerified: Boolean(decoded.email_verified),
       role: profile.role,
-      garageStatus: profile.garageStatus,
-      garageId: profile.garageId ?? null,
+      garageStatus: effectiveGarageStatus,
+      garageId: effectiveGarageId,
       exp: edgePayload.exp,
     };
 
@@ -89,6 +142,8 @@ export async function getCurrentAuthContext(): Promise<AuthenticatedContext | nu
       session: authoritativeSession,
       profile: {
         ...profile,
+        garageStatus: effectiveGarageStatus,
+        garageId: effectiveGarageId,
         emailVerified: Boolean(decoded.email_verified),
       },
     };

@@ -69,23 +69,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
           NextResponse.redirect(new URL(target, request.url))
         );
       }
-
-      const isAllowedWhilePending =
-        pathname === "/garage/pending" ||
-        pathname === "/garage/profile" ||
-        pathname.startsWith("/garage/profile/");
-
-      if (session.garageStatus !== "approved" && !isAllowedWhilePending) {
-        return applyLocaleCookie(
-          NextResponse.redirect(new URL("/garage/pending", request.url))
-        );
-      }
-
-      if (session.garageStatus === "approved" && pathname === "/garage/pending") {
-        return applyLocaleCookie(
-          NextResponse.redirect(new URL("/garage", request.url))
-        );
-      }
     }
 
     if (isAdminRoute && session.role !== "ADMIN") {

@@ -1,5 +1,11 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { LOCALE_COOKIE_NAME } from "@/i18n/config";
+import {
+  EDGE_SESSION_COOKIE,
+  signEdgeSession,
+  verifyEdgeSession,
+} from "@/lib/auth/edge-session";
 import { getCurrentAuthContext } from "@/lib/auth/server-auth";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { updateProfileSchema } from "@/lib/validators/profile";
@@ -12,7 +18,47 @@ export async function GET(): Promise<NextResponse> {
   if (!ctx) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
-  return NextResponse.json({ profile: ctx.profile });
+
+  const response = NextResponse.json({ profile: ctx.profile });
+
+  try {
+    const cookieStore = await cookies();
+    const currentEdgeCookie = cookieStore.get(EDGE_SESSION_COOKIE)?.value;
+    const edgePayload = currentEdgeCookie
+      ? await verifyEdgeSession(currentEdgeCookie)
+      : null;
+
+    if (
+      edgePayload &&
+      (edgePayload.garageStatus !== ctx.profile.garageStatus ||
+        edgePayload.role !== ctx.profile.role ||
+        edgePayload.garageId !== (ctx.profile.garageId ?? null))
+    ) {
+      const refreshedToken = await signEdgeSession({
+        uid: ctx.profile.uid,
+        email: ctx.profile.email,
+        emailVerified: Boolean(ctx.profile.emailVerified),
+        role: ctx.profile.role,
+        garageStatus: ctx.profile.garageStatus,
+        garageId: ctx.profile.garageId ?? null,
+      });
+
+      response.cookies.set(EDGE_SESSION_COOKIE, refreshedToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: Math.max(
+          edgePayload.exp - Math.floor(Date.now() / 1000),
+          60
+        ),
+      });
+    }
+  } catch (err) {
+    console.warn("Could not sync edge cookie in GET /api/user/profile:", err);
+  }
+
+  return response;
 }
 
 export async function PATCH(request: Request): Promise<NextResponse> {

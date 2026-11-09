@@ -59,15 +59,34 @@ export async function POST(
     updatedAt: nowIso,
   });
 
-  if (targetUser.garageId) {
+  let resolvedGarageId = targetUser.garageId ?? null;
+
+  if (resolvedGarageId) {
     const garageRef = admin.adminDb
       .collection("garages")
-      .doc(targetUser.garageId);
+      .doc(resolvedGarageId);
     const garageSnap = await garageRef.get();
     if (garageSnap.exists) {
       await garageRef.update({
         status: decision,
         updatedAt: nowIso,
+      });
+    }
+  } else {
+    const gQuery = await admin.adminDb
+      .collection("garages")
+      .where("ownerUid", "==", userId)
+      .limit(1)
+      .get();
+    if (!gQuery.empty && gQuery.docs[0]) {
+      const gDoc = gQuery.docs[0];
+      resolvedGarageId = gDoc.id;
+      await gDoc.ref.update({
+        status: decision,
+        updatedAt: nowIso,
+      });
+      await userRef.update({
+        garageId: resolvedGarageId,
       });
     }
   }
@@ -78,7 +97,7 @@ export async function POST(
       ...(fbUser.customClaims ?? {}),
       role: "GARAGE_OWNER",
       garageStatus: decision,
-      ...(targetUser.garageId ? { garageId: targetUser.garageId } : {}),
+      ...(resolvedGarageId ? { garageId: resolvedGarageId } : {}),
     });
   } catch {
     // User may not exist in Auth if created solely in test fixtures

@@ -61,11 +61,24 @@ export async function PATCH(
       if (ownerSnap.exists) {
         await ownerRef.update({
           garageStatus: updates.status,
+          garageId: garageId,
           updatedAt: nowIso,
         });
       }
     } catch (err) {
       console.warn("Could not sync owner user garageStatus:", err);
+    }
+
+    try {
+      const fbUser = await admin.adminAuth.getUser(currentGarage.ownerUid);
+      await admin.adminAuth.setCustomUserClaims(currentGarage.ownerUid, {
+        ...(fbUser.customClaims ?? {}),
+        role: "GARAGE_OWNER",
+        garageStatus: updates.status,
+        garageId: garageId,
+      });
+    } catch (err) {
+      console.warn("Could not sync custom claims:", err);
     }
   }
 
