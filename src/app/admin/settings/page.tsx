@@ -8,3 +8,4 @@ export default async function AdminSettingsPage() {
 
   return <PlatformSettingsClient initialSettings={settings} />;
 }
+
