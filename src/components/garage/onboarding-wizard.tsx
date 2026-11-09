@@ -25,6 +25,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { CitySelectCombobox } from "@/components/shared/city-select-combobox";
 import { getFirebaseClient } from "@/lib/firebase/client";
 import { buildDefaultWorkingHours } from "@/lib/garage-utils";
 import {
@@ -382,10 +383,17 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="ob-city">{t("city")}</Label>
-                  <Input
+                  <CitySelectCombobox
                     id="ob-city"
+                    value={form.watch("city")}
+                    onChange={(city) =>
+                      form.setValue("city", city, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      })
+                    }
                     placeholder={t("cityPlaceholder")}
-                    {...form.register("city")}
+                    error={form.formState.errors.city?.message}
                   />
                   {form.formState.errors.city ? (
                     <p className="text-xs text-destructive">

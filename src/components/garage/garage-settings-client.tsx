@@ -26,6 +26,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { CitySelectCombobox } from "@/components/shared/city-select-combobox";
 import { getFirebaseClient } from "@/lib/firebase/client";
 import { getEffectiveReminderQuota } from "@/lib/garage-utils";
 import {
@@ -337,7 +338,18 @@ export function GarageSettingsClient({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="set-city">{tOb("city")}</Label>
-              <Input id="set-city" {...form.register("city")} />
+              <CitySelectCombobox
+                id="set-city"
+                value={form.watch("city")}
+                onChange={(city) =>
+                  form.setValue("city", city, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                placeholder={tOb("cityPlaceholder")}
+                error={form.formState.errors.city?.message}
+              />
             </div>
           </div>
 
