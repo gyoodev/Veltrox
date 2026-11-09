@@ -14,13 +14,14 @@ import type { Garage } from "@/types/domain";
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const admin = getFirebaseAdmin();
-  if (!admin) {
-    return NextResponse.json(
-      { error: "FIREBASE_ADMIN_NOT_CONFIGURED" },
-      { status: 503 }
-    );
-  }
+  try {
+    const admin = getFirebaseAdmin();
+    if (!admin) {
+      return NextResponse.json(
+        { error: "FIREBASE_ADMIN_NOT_CONFIGURED" },
+        { status: 503 }
+      );
+    }
 
   const ctx = await getCurrentAuthContext();
   if (
@@ -188,15 +189,25 @@ export async function POST(request: Request): Promise<NextResponse> {
     garageId,
   });
 
-  const response = NextResponse.json({ garage }, { status: 201 });
-  response.cookies.set(EDGE_SESSION_COOKIE, edgeSessionToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE_SECONDS,
-  });
+    const response = NextResponse.json({ garage }, { status: 201 });
+    response.cookies.set(EDGE_SESSION_COOKIE, edgeSessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_MAX_AGE_SECONDS,
+    });
 
-  return response;
+    return response;
+  } catch (error) {
+    console.error("Garage onboarding failed with uncaught exception:", error);
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "INTERNAL_ERROR",
+        details: String(error),
+      },
+      { status: 500 }
+    );
+  }
 }
 

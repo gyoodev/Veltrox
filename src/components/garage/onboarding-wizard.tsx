@@ -272,6 +272,7 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
       try {
         const errJson = (await res.json()) as {
           error?: string;
+          details?: string;
           issues?: {
             fieldErrors?: Record<string, string[]>;
             formErrors?: string[];
@@ -283,7 +284,9 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
             .join("; ");
           errorMsg = fieldMsgs || "Грешка при валидация на данните.";
         } else if (errJson.error) {
-          errorMsg = `Грешка: ${errJson.error}`;
+          errorMsg = `Грешка (${res.status}): ${errJson.error}${
+            errJson.details ? ` - ${errJson.details}` : ""
+          }`;
         }
       } catch {}
       toast.error(errorMsg);
@@ -640,12 +643,20 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
                   )}
                 </div>
 
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {t("logoTitle")}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <p className="text-sm font-semibold text-foreground">
+                      {t("logoTitle")}
+                    </p>
+                    <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-medium text-emerald-400">
+                      Незадължително
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
                     {form.getValues("name")} • {form.getValues("city")}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/80 max-w-sm mx-auto">
+                    Логото е по избор. Можете да пропуснете тази стъпка и да го качите по-късно от настройките на сервиза.
                   </p>
                 </div>
 
@@ -656,24 +667,45 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
                   className="hidden"
                   onChange={handleLogoFileChange}
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={uploadingLogo}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {uploadingLogo ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Качване...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="h-4 w-4" />
-                      <span>{t("uploadLogo")}</span>
-                    </>
-                  )}
-                </Button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={uploadingLogo}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {uploadingLogo ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Качване...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="h-4 w-4" />
+                        <span>{logoPreviewUrl ? "Смени лого" : t("uploadLogo")}</span>
+                      </>
+                    )}
+                  </Button>
+
+                  {logoPreviewUrl && !uploadingLogo ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                      onClick={() => {
+                        setSelectedLogoFile(null);
+                        setLogoPreviewUrl(null);
+                        form.setValue("logoUrl", null, { shouldDirty: true });
+                        form.setValue("logoStoragePath", null, { shouldDirty: true });
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                    >
+                      <X className="h-3.5 w-3.5 mr-1" />
+                      <span>Премахни</span>
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             </div>
           ) : null}
@@ -703,23 +735,36 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button
-                type="submit"
-                variant="gradient"
-                disabled={form.formState.isSubmitting || uploadingLogo}
-              >
-                {form.formState.isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t("saving")}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    {t("finishButton")}
-                  </>
+              <div className="flex items-center gap-2">
+                {!logoPreviewUrl && (
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                    disabled={form.formState.isSubmitting}
+                  >
+                    Пропусни логото
+                  </Button>
                 )}
-              </Button>
+                <Button
+                  type="submit"
+                  variant="gradient"
+                  disabled={form.formState.isSubmitting || uploadingLogo}
+                >
+                  {form.formState.isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t("saving")}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      {t("finishButton")}
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         </form>
