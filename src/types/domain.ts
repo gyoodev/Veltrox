@@ -491,6 +491,20 @@ export interface PlatformContentConfig {
   updatedByUid: string | null;
 }
 
+/** Collection: `platformConfig/settings` - Global runtime feature flags & controls */
+export interface PlatformSettingsConfig {
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  allowRegistrations: boolean;
+  allowGarageApplications: boolean;
+  complianceChecksEnabled: boolean;
+  defaultCurrency: "BGN" | "EUR";
+  proPlanPriceEur: number;
+  systemNotice: string;
+  updatedAt: string;
+  updatedByUid: string | null;
+}
+
 export const AUDIT_LOG_ACTIONS = [
   "USER_REGISTERED",
   "USER_ROLE_CHANGED",
@@ -504,6 +518,10 @@ export const AUDIT_LOG_ACTIONS = [
   "USER_SUSPENDED",
   "USER_UNSUSPENDED",
   "CONTENT_UPDATED",
+  "PLATFORM_SETTINGS_UPDATED",
+  "BROADCAST_NOTIFICATION_SENT",
+  "DATABASE_SNAPSHOT_EXPORTED",
+  "SYSTEM_CACHE_PURGED",
   "REMINDER_ENGINE_RUN",
   "GDPR_ACCOUNT_DELETED",
   "GDPR_DATA_EXPORTED",

@@ -1,12 +1,15 @@
 import "server-only";
 
 import { getPublicPlatformCms } from "@/lib/data/platform-cms";
+import { getPlatformSettings } from "@/lib/data/platform-settings";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import type {
+  Appointment,
   AppNotification,
   AuditLog,
   Garage,
   PlatformContentConfig,
+  PlatformSettingsConfig,
   Reminder,
   UserProfile,
   Vehicle,
@@ -18,10 +21,12 @@ export interface AdminDashboardBundle {
   garages: Garage[];
   vehicles: Vehicle[];
   workOrders: WorkOrder[];
+  appointments: Appointment[];
   reminders: Reminder[];
   notifications: AppNotification[];
   auditLogs: AuditLog[];
   cms: PlatformContentConfig;
+  settings: PlatformSettingsConfig;
 }
 
 /**
@@ -30,7 +35,10 @@ export interface AdminDashboardBundle {
  */
 export async function getAdminDashboardBundle(): Promise<AdminDashboardBundle> {
   const admin = getFirebaseAdmin();
-  const cms = await getPublicPlatformCms();
+  const [cms, settings] = await Promise.all([
+    getPublicPlatformCms(),
+    getPlatformSettings(),
+  ]);
 
   if (!admin) {
     return {
@@ -38,10 +46,12 @@ export async function getAdminDashboardBundle(): Promise<AdminDashboardBundle> {
       garages: [],
       vehicles: [],
       workOrders: [],
+      appointments: [],
       reminders: [],
       notifications: [],
       auditLogs: [],
       cms,
+      settings,
     };
   }
 
@@ -50,6 +60,7 @@ export async function getAdminDashboardBundle(): Promise<AdminDashboardBundle> {
     garagesSnap,
     vehiclesSnap,
     workOrdersSnap,
+    appointmentsSnap,
     remindersSnap,
     notificationsSnap,
     auditLogsSnap,
@@ -58,6 +69,7 @@ export async function getAdminDashboardBundle(): Promise<AdminDashboardBundle> {
     admin.adminDb.collection("garages").get(),
     admin.adminDb.collection("vehicles").get(),
     admin.adminDb.collection("workOrders").get(),
+    admin.adminDb.collection("appointments").get(),
     admin.adminDb.collection("reminders").get(),
     admin.adminDb.collection("notifications").get(),
     admin.adminDb.collection("auditLogs").get(),
@@ -81,6 +93,11 @@ export async function getAdminDashboardBundle(): Promise<AdminDashboardBundle> {
     id: d.id,
   }));
 
+  const appointments = appointmentsSnap.docs.map((d) => ({
+    ...(d.data() as Appointment),
+    id: d.id,
+  }));
+
   const reminders = remindersSnap.docs.map((d) => ({
     ...(d.data() as Reminder),
     id: d.id,
@@ -101,10 +118,12 @@ export async function getAdminDashboardBundle(): Promise<AdminDashboardBundle> {
     garages,
     vehicles,
     workOrders,
+    appointments,
     reminders,
     notifications,
     auditLogs,
     cms,
+    settings,
   };
 }
 
