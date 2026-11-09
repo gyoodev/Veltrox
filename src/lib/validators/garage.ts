@@ -35,21 +35,21 @@ export const workingHoursSchema = z.object({
 
 export const garageOnboardingSchema = z.object({
   name: z.string().trim().min(2, "nameMinLength").max(80, "nameMaxLength"),
-  description: z.string().trim().max(500, "fieldTooLong").nullable(),
+  description: z.string().trim().max(500, "fieldTooLong").nullish(),
   city: z.string().trim().min(2, "cityRequired").max(60, "fieldTooLong"),
   address: z.string().trim().min(3, "addressRequired").max(160, "fieldTooLong"),
   phone: z
     .string()
     .trim()
-    .regex(/^\+?[0-9\s()-]{7,22}$/, "phoneInvalid"),
+    .regex(/^\+?[0-9\s().\/-]{6,25}$/, "phoneInvalid"),
   email: z.string().trim().email("emailInvalid"),
   workingHours: workingHoursSchema,
   servicesOffered: z
     .array(z.string().trim().min(2).max(60))
     .min(1, "servicesRequired")
     .max(25, "fieldTooLong"),
-  logoUrl: z.string().url().or(z.literal("")).nullable().optional(),
-  logoStoragePath: z.string().max(400).nullable().optional(),
+  logoUrl: z.string().url().or(z.literal("")).nullish(),
+  logoStoragePath: z.string().max(400).nullish(),
 });
 
 export type GarageOnboardingValues = z.infer<typeof garageOnboardingSchema>;

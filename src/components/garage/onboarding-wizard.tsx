@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   ArrowLeft,
   ArrowRight,
@@ -32,7 +31,7 @@ import {
   type GarageOnboardingValues,
   garageOnboardingSchema,
 } from "@/lib/validators/garage";
-import { DAYS_OF_WEEK, type Garage, type UserProfile } from "@/types/domain";
+import { DAYS_OF_WEEK, type UserProfile } from "@/types/domain";
 
 const PRESET_SERVICE_KEYS = [
   "oil",
@@ -60,6 +59,7 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
   const [customService, setCustomService] = useState("");
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const defaultServices = [tPresets("oil"), tPresets("diagnostics"), tPresets("brakes")];
@@ -118,15 +118,102 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
     setCustomService("");
   };
 
-  const handleLogoFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const uploadLogoFile = async (
+    file: File
+  ): Promise<{ url: string; storagePath: string } | null> => {
+    setUploadingLogo(true);
+    try {
+      const apiKey =
+        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
+        "081c67f1d21a81269c6275b692e61030";
+
+      // 1. Direct ImgBB Cloud upload
+      try {
+        const imgbbForm = new FormData();
+        imgbbForm.append("image", file);
+        imgbbForm.append("name", `garage-logo-${Date.now()}`);
+
+        const imgbbRes = await fetch(
+          `https://api.imgbb.com/1/upload?key=${apiKey}`,
+          {
+            method: "POST",
+            body: imgbbForm,
+          }
+        );
+
+        if (imgbbRes.ok) {
+          const imgbbJson = (await imgbbRes.json()) as {
+            data?: { id: string; url: string; display_url: string };
+            success: boolean;
+          };
+          if (imgbbJson.success && imgbbJson.data) {
+            const cloudUrl = imgbbJson.data.display_url || imgbbJson.data.url;
+            const path = `imgbb:${imgbbJson.data.id}`;
+            form.setValue("logoUrl", cloudUrl, {
+              shouldValidate: true,
+              shouldDirty: true,
+            });
+            form.setValue("logoStoragePath", path, {
+              shouldValidate: true,
+              shouldDirty: true,
+            });
+            setLogoPreviewUrl(cloudUrl);
+            toast.success("Логото е качено успешно!");
+            return { url: cloudUrl, storagePath: path };
+          }
+        }
+      } catch (cloudErr) {
+        console.warn(
+          "Direct logo upload to ImgBB failed, using proxy fallback:",
+          cloudErr
+        );
+      }
+
+      // 2. Server proxy fallback
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/vehicles/upload-photo", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const json = (await res.json()) as {
+          ok: boolean;
+          url: string;
+          storagePath: string;
+        };
+        form.setValue("logoUrl", json.url, {
+          shouldValidate: true,
+          shouldDirty: true,
+        });
+        form.setValue("logoStoragePath", json.storagePath, {
+          shouldValidate: true,
+          shouldDirty: true,
+        });
+        setLogoPreviewUrl(json.url);
+        toast.success("Логото е качено успешно!");
+        return { url: json.url, storagePath: json.storagePath };
+      }
+    } catch (err) {
+      console.warn("Logo upload failed:", err);
+      toast.error("Неуспешно качване на логото.");
+    } finally {
+      setUploadingLogo(false);
+    }
+    return null;
+  };
+
+  const handleLogoFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Max 5 MB image size.");
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Максималният размер на файла е 10 MB.");
       return;
     }
     setSelectedLogoFile(file);
     setLogoPreviewUrl(URL.createObjectURL(file));
+    await uploadLogoFile(file);
   };
 
   const goNextStep = async () => {
@@ -154,21 +241,55 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
+    // If a logo file was chosen but not uploaded yet, finish uploading it first
+    if (selectedLogoFile && !values.logoUrl) {
+      const uploaded = await uploadLogoFile(selectedLogoFile);
+      if (uploaded) {
+        values.logoUrl = uploaded.url;
+        values.logoStoragePath = uploaded.storagePath;
+      }
+    }
+
+    const payload = {
+      ...values,
+      description:
+        values.description && values.description.trim().length > 0
+          ? values.description.trim()
+          : null,
+      logoUrl: values.logoUrl || null,
+      logoStoragePath: values.logoStoragePath || null,
+    };
+
     const res = await fetch("/api/garage/onboarding", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
-      toast.error("Could not complete garage onboarding.");
+      let errorMsg = "Could not complete garage onboarding.";
+      try {
+        const errJson = (await res.json()) as {
+          error?: string;
+          issues?: {
+            fieldErrors?: Record<string, string[]>;
+            formErrors?: string[];
+          };
+        };
+        if (errJson.error === "VALIDATION_FAILED" && errJson.issues) {
+          const fieldMsgs = Object.entries(errJson.issues.fieldErrors || {})
+            .map(([field, msgs]) => `${field}: ${msgs.join(", ")}`)
+            .join("; ");
+          errorMsg = fieldMsgs || "Грешка при валидация на данните.";
+        } else if (errJson.error) {
+          errorMsg = `Грешка: ${errJson.error}`;
+        }
+      } catch {}
+      toast.error(errorMsg);
       return;
     }
 
-    const json = (await res.json()) as { garage: Garage };
-    const createdGarage = json.garage;
-
-    // Refresh Firebase ID token so client Storage rules immediately see `garageId`
+    // Refresh Firebase ID token so client immediately sees `garageId`
     const fb = getFirebaseClient();
     if (fb?.auth.currentUser) {
       try {
@@ -178,28 +299,7 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ idToken: freshIdToken }),
         });
-
-        if (selectedLogoFile) {
-          const safeName = selectedLogoFile.name.replace(
-            /[^a-zA-Z0-9._-]/g,
-            "_"
-          );
-          const storagePath = `garages/${createdGarage.id}/logo/${Date.now()}-${safeName}`;
-          const storageRef = ref(fb.storage, storagePath);
-          await uploadBytes(storageRef, selectedLogoFile, {
-            contentType: selectedLogoFile.type,
-          });
-          const logoUrl = await getDownloadURL(storageRef);
-
-          await fetch("/api/garage/settings", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ logoUrl, logoStoragePath: storagePath }),
-          });
-        }
-      } catch {
-        // Non-fatal if optional logo upload fails; owner can re-upload in Settings
-      }
+      } catch {}
     }
 
     toast.success(t("savedToast"));
@@ -514,7 +614,7 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
           {step === 4 ? (
             <div className="space-y-6">
               <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-secondary/30 p-6 text-center">
-                <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-primary/30 bg-primary/10 text-primary shadow-glow-blue">
+                <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl border border-primary/30 bg-primary/10 text-primary shadow-glow-blue">
                   {logoPreviewUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -524,6 +624,11 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
                     />
                   ) : (
                     <Building2 className="h-10 w-10" />
+                  )}
+                  {uploadingLogo && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-xs">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
                   )}
                 </div>
 
@@ -546,10 +651,20 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={uploadingLogo}
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Camera className="h-4 w-4" />
-                  {t("uploadLogo")}
+                  {uploadingLogo ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Качване...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-4 w-4" />
+                      <span>{t("uploadLogo")}</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
@@ -583,7 +698,7 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
               <Button
                 type="submit"
                 variant="gradient"
-                disabled={form.formState.isSubmitting}
+                disabled={form.formState.isSubmitting || uploadingLogo}
               >
                 {form.formState.isSubmitting ? (
                   <>

@@ -23,19 +23,19 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const ctx = await getCurrentAuthContext();
-  if (!ctx || ctx.profile.role !== "GARAGE_OWNER" || ctx.profile.isStaff) {
+  if (
+    !ctx ||
+    (ctx.profile.role !== "GARAGE_OWNER" && ctx.profile.role !== "ADMIN") ||
+    ctx.profile.isStaff
+  ) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  if (ctx.profile.garageStatus !== "approved") {
+  if (
+    ctx.profile.role === "GARAGE_OWNER" &&
+    ctx.profile.garageStatus !== "approved"
+  ) {
     return NextResponse.json({ error: "GARAGE_NOT_APPROVED" }, { status: 403 });
-  }
-
-  if (ctx.profile.garageId) {
-    return NextResponse.json(
-      { error: "ALREADY_ONBOARDED", garageId: ctx.profile.garageId },
-      { status: 409 }
-    );
   }
 
   let rawBody: unknown;
@@ -56,29 +56,67 @@ export async function POST(request: Request): Promise<NextResponse> {
   const data = parsed.data;
   const uid = ctx.session.uid;
 
-  // Ensure unique SEO slug
-  const baseSlug = slugifyGarageName(data.name);
-  let slug = baseSlug;
-  let suffix = 2;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const existingSlug = await admin.adminDb
+  // Check if garage already exists for this user (either via ctx.profile.garageId or ownerUid)
+  let existingGarageId = ctx.profile.garageId ?? null;
+  let existingGarageDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+
+  if (existingGarageId) {
+    const docSnap = await admin.adminDb
       .collection("garages")
-      .where("slug", "==", slug)
-      .limit(1)
+      .doc(existingGarageId)
       .get();
-    if (existingSlug.empty) break;
-    slug = `${baseSlug}-${suffix}`;
-    suffix += 1;
+    if (docSnap.exists) {
+      existingGarageDoc = docSnap;
+    }
   }
 
-  const garageRef = admin.adminDb.collection("garages").doc();
-  const garageId = garageRef.id;
+  if (!existingGarageDoc) {
+    const ownerQuery = await admin.adminDb
+      .collection("garages")
+      .where("ownerUid", "==", uid)
+      .limit(1)
+      .get();
+    if (!ownerQuery.empty && ownerQuery.docs[0]) {
+      existingGarageDoc = ownerQuery.docs[0];
+      existingGarageId = existingGarageDoc.id;
+    }
+  }
+
+  const garageId =
+    existingGarageId ?? admin.adminDb.collection("garages").doc().id;
+  const garageRef = admin.adminDb.collection("garages").doc(garageId);
+  const existingData = existingGarageDoc?.data() as Partial<Garage> | undefined;
   const nowIso = new Date().toISOString();
+
+  // Ensure unique SEO slug
+  const baseSlug = slugifyGarageName(data.name);
+  let slug = existingData?.slug || baseSlug;
+  if (!existingData || existingData.name !== data.name) {
+    slug = baseSlug;
+    let suffix = 2;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const existingSlug = await admin.adminDb
+        .collection("garages")
+        .where("slug", "==", slug)
+        .limit(1)
+        .get();
+      if (existingSlug.empty || existingSlug.docs[0]?.id === garageId) break;
+      slug = `${baseSlug}-${suffix}`;
+      suffix += 1;
+    }
+  }
+
+  const finalLogoUrl =
+    data.logoUrl !== undefined ? data.logoUrl : (existingData?.logoUrl ?? null);
+  const finalLogoStoragePath =
+    data.logoStoragePath !== undefined
+      ? data.logoStoragePath
+      : (existingData?.logoStoragePath ?? null);
 
   const garage: Garage = {
     id: garageId,
-    ownerUid: uid,
+    ownerUid: existingData?.ownerUid || uid,
     name: data.name,
     slug,
     description:
@@ -89,36 +127,47 @@ export async function POST(request: Request): Promise<NextResponse> {
     city: data.city,
     phone: data.phone,
     email: data.email,
-    logoUrl: data.logoUrl ?? null,
-    logoStoragePath: data.logoStoragePath ?? null,
+    logoUrl: finalLogoUrl,
+    logoStoragePath: finalLogoStoragePath,
     workingHours: data.workingHours,
     servicesOffered: Array.from(new Set(data.servicesOffered)),
-    plan: "free",
-    monthlyReminderQuota: 50,
-    monthlyRemindersUsed: 0,
-    quotaResetMonth: getCurrentMonthKey(),
-    status: "approved",
-    createdAt: nowIso,
+    plan: existingData?.plan ?? "free",
+    monthlyReminderQuota: existingData?.monthlyReminderQuota ?? 50,
+    monthlyRemindersUsed: existingData?.monthlyRemindersUsed ?? 0,
+    quotaResetMonth: existingData?.quotaResetMonth ?? getCurrentMonthKey(),
+    status: existingData?.status ?? "approved",
+    createdAt: existingData?.createdAt ?? nowIso,
     updatedAt: nowIso,
   };
 
-  await garageRef.set(garage);
+  await garageRef.set(garage, { merge: true });
 
-  await admin.adminDb.collection("users").doc(uid).update({
-    garageId,
-    updatedAt: nowIso,
-  });
+  await admin.adminDb.collection("users").doc(uid).set(
+    {
+      garageId,
+      garageStatus: "approved",
+      updatedAt: nowIso,
+    },
+    { merge: true }
+  );
 
-  await admin.adminAuth.setCustomUserClaims(uid, {
-    role: "GARAGE_OWNER",
-    garageStatus: "approved",
-    garageId,
-  });
+  try {
+    await admin.adminAuth.setCustomUserClaims(uid, {
+      role: ctx.profile.role,
+      garageStatus: "approved",
+      garageId,
+    });
+  } catch (claimErr) {
+    console.warn(
+      "Could not set custom user claims during garage onboarding:",
+      claimErr
+    );
+  }
 
   await admin.adminDb.collection("auditLogs").add({
-    action: "GARAGE_ONBOARDED",
+    action: existingGarageDoc ? "GARAGE_UPDATED" : "GARAGE_ONBOARDED",
     actorUid: uid,
-    actorRole: "GARAGE_OWNER",
+    actorRole: ctx.profile.role,
     targetUid: uid,
     targetGarageId: garageId,
     metadata: {
@@ -134,7 +183,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     uid,
     email: ctx.profile.email,
     emailVerified: ctx.profile.emailVerified,
-    role: "GARAGE_OWNER",
+    role: ctx.profile.role,
     garageStatus: "approved",
     garageId,
   });
