@@ -201,7 +201,7 @@ export function getFallbackBulgariaFuelPrices(
     {
       code: "gasoline" as const,
       priceEur: 1.58,
-      unit: "€/l" as const,
+      unit: "L" as const,
       delta30dEur: -0.08,
       delta30dPercent: -4.8,
       curveBase: 1.66,
@@ -210,7 +210,7 @@ export function getFallbackBulgariaFuelPrices(
     {
       code: "diesel" as const,
       priceEur: 1.90,
-      unit: "€/l" as const,
+      unit: "L" as const,
       delta30dEur: 0.05,
       delta30dPercent: 2.7,
       curveBase: 1.85,
@@ -219,7 +219,7 @@ export function getFallbackBulgariaFuelPrices(
     {
       code: "lpg" as const,
       priceEur: 0.73,
-      unit: "€/l" as const,
+      unit: "L" as const,
       delta30dEur: -0.02,
       delta30dPercent: -2.7,
       curveBase: 0.75,
@@ -228,7 +228,7 @@ export function getFallbackBulgariaFuelPrices(
     {
       code: "methane" as const,
       priceEur: 1.60,
-      unit: "€/kg" as const,
+      unit: "kg" as const,
       delta30dEur: 0.00,
       delta30dPercent: 0.0,
       curveBase: 1.60,
