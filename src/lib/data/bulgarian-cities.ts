@@ -342,3 +342,4 @@ export function matchesCity(cityName: string, query: string): boolean {
 
   return false;
 }
+
