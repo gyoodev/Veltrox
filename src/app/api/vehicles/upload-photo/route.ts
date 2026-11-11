@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import crypto from "node:crypto";
 import { requireRole } from "@/lib/auth/server-auth";
-import { getFirebaseAdmin } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
@@ -82,7 +78,7 @@ export async function POST(req: Request) {
       process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
       IMGBB_DEFAULT_API_KEY;
 
-    // 5. Primary: Forward to ImgBB Cloud API v1
+    // 5. Forward to ImgBB REST API v1
     try {
       const imgbbForm = new FormData();
       imgbbForm.append("image", base64Data);
@@ -91,10 +87,6 @@ export async function POST(req: Request) {
       const imgbbRes = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
         method: "POST",
         body: imgbbForm,
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        },
       });
 
       if (imgbbRes.ok) {
@@ -104,76 +96,20 @@ export async function POST(req: Request) {
           return NextResponse.json({
             ok: true,
             url: directUrl,
-            storagePath: `imgbb:${imgbbJson.data.id || imgbbJson.data.title}`,
+            storagePath: `imgbb:${imgbbJson.data.id || Date.now()}`,
             deleteUrl: imgbbJson.data.delete_url || null,
             provider: "imgbb",
           });
         }
+      } else {
+        const errText = await imgbbRes.text().catch(() => "");
+        console.warn("ImgBB API returned non-OK status:", imgbbRes.status, errText);
       }
     } catch (cloudErr) {
       console.warn("ImgBB cloud upload from server encountered an error:", cloudErr);
     }
 
-    // 6. Secondary fallback: Firebase Admin Cloud Storage
-    const admin = getFirebaseAdmin();
-    if (admin) {
-      try {
-        const bucket = admin.adminStorage.bucket();
-        const uniqueId = crypto.randomBytes(6).toString("hex");
-        const filename = `uploads/${Date.now()}-${uniqueId}.${extension}`;
-        const fileRef = bucket.file(filename);
-
-        await fileRef.save(fileBuffer, {
-          metadata: {
-            contentType: mime,
-            cacheControl: "public, max-age=31536000",
-          },
-        });
-
-        await fileRef.makePublic().catch(() => {});
-        const bucketName = bucket.name;
-        const publicUrl = `https://storage.googleapis.com/${bucketName}/${filename}`;
-
-        return NextResponse.json({
-          ok: true,
-          url: publicUrl,
-          storagePath: filename,
-          filename,
-          provider: "firebase-storage",
-        });
-      } catch (storageErr) {
-        console.warn("Firebase Storage upload fallback encountered an error:", storageErr);
-      }
-    }
-
-    // 7. Tertiary fallback: Local public storage (only in dev where filesystem is writable)
-    if (process.env.NODE_ENV !== "production") {
-      try {
-        const uploadDir = path.join(process.cwd(), "public", "uploads", "cars");
-        await fs.mkdir(uploadDir, { recursive: true });
-
-        const uniqueId = crypto.randomBytes(6).toString("hex");
-        const filename = `car-${Date.now()}-${uniqueId}.${extension}`;
-        const targetFilePath = path.join(uploadDir, filename);
-
-        await fs.writeFile(targetFilePath, fileBuffer);
-
-        const publicUrl = `/uploads/cars/${filename}`;
-        const storagePath = `public/uploads/cars/${filename}`;
-
-        return NextResponse.json({
-          ok: true,
-          url: publicUrl,
-          storagePath,
-          filename,
-          provider: "local",
-        });
-      } catch (localErr) {
-        console.warn("Local storage fallback failed:", localErr);
-      }
-    }
-
-    // 8. Final resilient fallback: Base64 data URI
+    // 6. Resilient inline Data URI fallback so form submissions never crash
     const dataUri = `data:${mime};base64,${base64Data}`;
     return NextResponse.json({
       ok: true,
