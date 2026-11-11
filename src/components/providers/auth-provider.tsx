@@ -166,18 +166,29 @@ export function AuthProvider({
 
   const signOut = useCallback(async () => {
     const client = getFirebaseClient();
+
+    // 1. First: ALWAYS sign out from Firebase client SDK to clear Google/OAuth token from browser
+    if (client?.auth) {
+      try {
+        await firebaseSignOut(client.auth);
+      } catch (fbErr) {
+        console.warn("Firebase client signOut error:", fbErr);
+      }
+    }
+
+    // 2. Clear React client state immediately
+    setProfile(null);
+    setFirebaseUser(null);
+
+    // 3. Clear server session cookies
     try {
       await fetch("/api/auth/session", { method: "DELETE" });
-      if (client) {
-        await firebaseSignOut(client.auth);
-      }
     } catch (err) {
-      console.warn("Sign-out error:", err);
-    } finally {
-      setProfile(null);
-      setFirebaseUser(null);
-      window.location.href = "/login";
+      console.warn("Sign-out server cookie delete error:", err);
     }
+
+    // 4. Force browser navigation to /login with ?force=1 to prevent middleware workspace bounce
+    window.location.href = "/login?force=1";
   }, []);
 
   const value = useMemo<AuthContextValue>(

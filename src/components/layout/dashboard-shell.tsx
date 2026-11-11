@@ -630,8 +630,12 @@ export function DashboardShell({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    void signOut();
+                  }}
                   onClick={() => void signOut()}
-                  className="text-destructive focus:text-destructive"
+                  className="text-destructive focus:text-destructive cursor-pointer"
                 >
                   <LogOut className="h-4 w-4" />
                   {tCommon("signOut")}

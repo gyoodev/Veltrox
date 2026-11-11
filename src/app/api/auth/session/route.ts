@@ -222,39 +222,41 @@ export async function POST(request: Request): Promise<NextResponse> {
 /**
  * DELETE /api/auth/session
  * Signs the user out server-side, revokes Firebase refresh tokens when possible,
- * and clears both session cookies.
+ * and clears both session cookies across all paths.
  */
 export async function DELETE(): Promise<NextResponse> {
-  const cookieStore = await cookies();
-  const fbCookie = cookieStore.get(FB_SESSION_COOKIE)?.value;
-  const admin = getFirebaseAdmin();
+  try {
+    const cookieStore = await cookies();
+    const fbCookie = cookieStore.get(FB_SESSION_COOKIE)?.value;
+    const admin = getFirebaseAdmin();
 
-  if (fbCookie && admin) {
-    try {
-      const decoded = await admin.adminAuth.verifySessionCookie(fbCookie);
-      await admin.adminAuth.revokeRefreshTokens(decoded.sub);
-    } catch {
-      // Ignore expired/invalid cookie during sign-out cleanup
+    if (fbCookie && admin) {
+      try {
+        const decoded = await admin.adminAuth.verifySessionCookie(fbCookie, false);
+        if (decoded?.sub) {
+          await admin.adminAuth.revokeRefreshTokens(decoded.sub);
+        }
+      } catch {
+        // Ignore expired/invalid cookie during sign-out cleanup
+      }
     }
+  } catch (err) {
+    console.warn("DELETE /api/auth/session non-fatal error:", err);
   }
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set(FB_SESSION_COOKIE, "", {
+  const isProd = process.env.NODE_ENV === "production";
+  const clearCookieOptions = {
     path: "/",
     maxAge: 0,
     expires: new Date(0),
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-  });
-  response.cookies.set(EDGE_SESSION_COOKIE, "", {
-    path: "/",
-    maxAge: 0,
-    expires: new Date(0),
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-  });
+    secure: isProd,
+    sameSite: "lax" as const,
+  };
+
+  response.cookies.set(FB_SESSION_COOKIE, "", clearCookieOptions);
+  response.cookies.set(EDGE_SESSION_COOKIE, "", clearCookieOptions);
   response.cookies.delete(FB_SESSION_COOKIE);
   response.cookies.delete(EDGE_SESSION_COOKIE);
   return response;
