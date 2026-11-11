@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { normalizeLicensePlate } from "@/lib/validators/entities";
+import { getFirebaseClient } from "@/lib/firebase/client";
 import {
   type QuickWorkOrderFormValues,
   quickWorkOrderFormSchema,
