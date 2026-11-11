@@ -209,14 +209,51 @@ export function GarageSettingsClient({
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
-    const res = await fetch("/api/garage/settings", {
+    const fb = getFirebaseClient();
+    let idToken: string | null = null;
+    if (fb?.auth.currentUser) {
+      try {
+        idToken = await fb.auth.currentUser.getIdToken(false);
+      } catch {}
+    }
+
+    let res = await fetch("/api/garage/settings", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
       body: JSON.stringify(values),
     });
 
+    if (res.status === 401 && fb?.auth.currentUser) {
+      try {
+        const freshIdToken = await fb.auth.currentUser.getIdToken(true);
+        await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken: freshIdToken }),
+        });
+        res = await fetch("/api/garage/settings", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${freshIdToken}`,
+          },
+          body: JSON.stringify(values),
+        });
+      } catch {}
+    }
+
     if (!res.ok) {
-      toast.error("Could not save settings.");
+      let msg = "Could not save settings.";
+      try {
+        const errJson = (await res.json()) as { error?: string; details?: string };
+        if (errJson.error) {
+          msg = `Грешка (${res.status}): ${errJson.error}`;
+        }
+      } catch {}
+      toast.error(msg);
       return;
     }
 

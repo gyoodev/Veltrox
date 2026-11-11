@@ -258,11 +258,41 @@ export function VehicleFormDialog({
     const method = editingVehicle ? "PATCH" : "POST";
 
     try {
-      const response = await fetch(endpoint, {
+      const fb = getFirebaseClient();
+      let idToken: string | null = null;
+      if (fb?.auth.currentUser) {
+        try {
+          idToken = await fb.auth.currentUser.getIdToken(false);
+        } catch {}
+      }
+
+      let response = await fetch(endpoint, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
         body: JSON.stringify(values),
       });
+
+      if (response.status === 401 && fb?.auth.currentUser) {
+        try {
+          const freshIdToken = await fb.auth.currentUser.getIdToken(true);
+          await fetch("/api/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken: freshIdToken }),
+          });
+          response = await fetch(endpoint, {
+            method,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${freshIdToken}`,
+            },
+            body: JSON.stringify(values),
+          });
+        } catch {}
+      }
 
       if (!response.ok) {
         const errJson = (await response.json().catch(() => null)) as {

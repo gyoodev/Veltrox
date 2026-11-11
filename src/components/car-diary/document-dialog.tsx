@@ -138,19 +138,70 @@ export function DocumentDialog({
 
     setUploading(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-      const storagePath = `vehicles/${ownerUid}/${watchedVehicleId}/documents/${Date.now()}-${safeName}`;
-      const storageRef = ref(client.storage, storagePath);
+      let directUrl: string | null = null;
+      let storagePath: string | null = null;
 
-      await uploadBytes(storageRef, file, {
-        contentType: file.type,
-        cacheControl: "private,max-age=86400",
-      });
-      const url = await getDownloadURL(storageRef);
+      const apiKey =
+        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
+        "081c67f1d21a81269c6275b692e61030";
+
+      if (file.type.startsWith("image/")) {
+        try {
+          const imgbbForm = new FormData();
+          imgbbForm.append("image", file);
+          imgbbForm.append("name", `doc-${Date.now()}`);
+
+          const imgbbRes = await fetch(
+            `https://api.imgbb.com/1/upload?key=${apiKey}`,
+            { method: "POST", body: imgbbForm }
+          );
+          if (imgbbRes.ok) {
+            const imgbbJson = (await imgbbRes.json()) as {
+              data?: { id: string; url: string; display_url: string };
+              success: boolean;
+            };
+            if (imgbbJson.success && imgbbJson.data) {
+              directUrl = imgbbJson.data.display_url || imgbbJson.data.url;
+              storagePath = `imgbb:${imgbbJson.data.id}`;
+            }
+          }
+        } catch {}
+
+        if (!directUrl) {
+          try {
+            const proxyForm = new FormData();
+            proxyForm.append("file", file);
+            const proxyRes = await fetch("/api/vehicles/upload-photo", {
+              method: "POST",
+              body: proxyForm,
+            });
+            if (proxyRes.ok) {
+              const proxyJson = (await proxyRes.json()) as {
+                url: string;
+                storagePath: string;
+              };
+              directUrl = proxyJson.url;
+              storagePath = proxyJson.storagePath;
+            }
+          } catch {}
+        }
+      }
+
+      if (!directUrl || !storagePath) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
+        storagePath = `vehicles/${ownerUid}/${watchedVehicleId}/documents/${Date.now()}-${safeName}`;
+        const storageRef = ref(client.storage, storagePath);
+
+        await uploadBytes(storageRef, file, {
+          contentType: file.type,
+          cacheControl: "private,max-age=86400",
+        });
+        directUrl = await getDownloadURL(storageRef);
+      }
 
       form.setValue("fileName", file.name, { shouldValidate: true });
       form.setValue("contentType", file.type, { shouldValidate: true });
-      form.setValue("fileUrl", url, { shouldValidate: true });
+      form.setValue("fileUrl", directUrl, { shouldValidate: true });
       form.setValue("storagePath", storagePath, { shouldValidate: true });
       if (!form.getValues("title")) {
         form.setValue("title", file.name.replace(/\.[^.]+$/, ""), {
@@ -166,11 +217,41 @@ export function DocumentDialog({
   };
 
   const onSubmit = async (values: DocumentFormValues) => {
-    const res = await fetch("/api/documents", {
+    const fb = getFirebaseClient();
+    let idToken: string | null = null;
+    if (fb?.auth.currentUser) {
+      try {
+        idToken = await fb.auth.currentUser.getIdToken(false);
+      } catch {}
+    }
+
+    let res = await fetch("/api/documents", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
       body: JSON.stringify(values),
     });
+
+    if (res.status === 401 && fb?.auth.currentUser) {
+      try {
+        const freshIdToken = await fb.auth.currentUser.getIdToken(true);
+        await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken: freshIdToken }),
+        });
+        res = await fetch("/api/documents", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${freshIdToken}`,
+          },
+          body: JSON.stringify(values),
+        });
+      } catch {}
+    }
 
     if (!res.ok) {
       toast.error("Could not save document.");

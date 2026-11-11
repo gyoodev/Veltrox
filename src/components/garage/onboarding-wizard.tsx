@@ -283,11 +283,42 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
       logoStoragePath: values.logoStoragePath || null,
     };
 
-    const res = await fetch("/api/garage/onboarding", {
+    const fb = getFirebaseClient();
+    let idToken: string | null = null;
+    if (fb?.auth.currentUser) {
+      try {
+        idToken = await fb.auth.currentUser.getIdToken(false);
+      } catch {}
+    }
+
+    let res = await fetch("/api/garage/onboarding", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
+
+    // If session expired or claims were synced, try refreshing session and retry once
+    if (res.status === 401 && fb?.auth.currentUser) {
+      try {
+        const freshIdToken = await fb.auth.currentUser.getIdToken(true);
+        await fetch("/api/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken: freshIdToken }),
+        });
+        res = await fetch("/api/garage/onboarding", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${freshIdToken}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch {}
+    }
 
     if (!res.ok) {
       let errorMsg = "Could not complete garage onboarding.";
@@ -320,8 +351,7 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
       return;
     }
 
-    // Refresh Firebase ID token so client immediately sees `garageId`
-    const fb = getFirebaseClient();
+    // Refresh Firebase ID token and server session so client immediately sees `garageId`
     if (fb?.auth.currentUser) {
       try {
         const freshIdToken = await fb.auth.currentUser.getIdToken(true);

@@ -34,9 +34,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   if (
     ctx.profile.role === "GARAGE_OWNER" &&
-    ctx.profile.garageStatus !== "approved"
+    ctx.profile.garageStatus === "rejected"
   ) {
-    return NextResponse.json({ error: "GARAGE_NOT_APPROVED" }, { status: 403 });
+    return NextResponse.json({ error: "GARAGE_REJECTED" }, { status: 403 });
   }
 
   let rawBody: unknown;

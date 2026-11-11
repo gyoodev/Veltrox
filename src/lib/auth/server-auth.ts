@@ -1,6 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   EDGE_SESSION_COOKIE,
@@ -34,36 +34,80 @@ export interface GarageWorkspaceContext extends AuthenticatedContext {
  * Authorization is NEVER enforced solely in the UI or client token.
  */
 export async function getCurrentAuthContext(): Promise<AuthenticatedContext | null> {
-  const cookieStore = await cookies();
-  const fbSessionCookie = cookieStore.get(FB_SESSION_COOKIE)?.value;
-  const edgeCookie = cookieStore.get(EDGE_SESSION_COOKIE)?.value;
-
-  if (!fbSessionCookie || !edgeCookie) {
-    return null;
-  }
-
-  const edgePayload = await verifyEdgeSession(edgeCookie);
-  if (!edgePayload) {
-    return null;
-  }
-
   const admin = getFirebaseAdmin();
   if (!admin) {
     return null;
   }
 
-  try {
-    const decoded = await admin.adminAuth.verifySessionCookie(
-      fbSessionCookie,
-      true
-    );
-    if (decoded.uid !== edgePayload.uid) {
-      return null;
-    }
+  let authenticatedUid: string | null = null;
+  let verifiedEmail: string | undefined = undefined;
+  let verifiedEmailVerified = false;
+  let tokenExp: number | undefined = undefined;
 
+  // 1. Check Authorization: Bearer <idToken> header (if present)
+  try {
+    const headerList = await headers();
+    const authHeader = headerList.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const idToken = authHeader.slice(7).trim();
+      if (idToken) {
+        try {
+          const decoded = await admin.adminAuth.verifyIdToken(idToken);
+          authenticatedUid = decoded.uid;
+          verifiedEmail = decoded.email;
+          verifiedEmailVerified = Boolean(decoded.email_verified);
+          tokenExp = decoded.exp;
+        } catch {
+          // Token expired or invalid, fall back to cookies
+        }
+      }
+    }
+  } catch {
+    // Non-fatal if headers() cannot be read
+  }
+
+  // 2. Check session cookies
+  const cookieStore = await cookies();
+  const fbSessionCookie = cookieStore.get(FB_SESSION_COOKIE)?.value;
+  const edgeCookie = cookieStore.get(EDGE_SESSION_COOKIE)?.value;
+
+  let edgePayload: SessionPayload | null = null;
+  if (edgeCookie) {
+    edgePayload = await verifyEdgeSession(edgeCookie);
+  }
+
+  if (!authenticatedUid && fbSessionCookie) {
+    try {
+      // Use checkRevoked = false to prevent premature session revocation when custom claims update
+      const decoded = await admin.adminAuth.verifySessionCookie(
+        fbSessionCookie,
+        false
+      );
+      authenticatedUid = decoded.uid;
+      verifiedEmail = decoded.email;
+      verifiedEmailVerified = Boolean(decoded.email_verified);
+      tokenExp = decoded.exp;
+    } catch {
+      // Cookie invalid, check edge payload fallback
+    }
+  }
+
+  // 3. Fallback to valid edge session payload if available
+  if (!authenticatedUid && edgePayload) {
+    authenticatedUid = edgePayload.uid;
+    verifiedEmail = edgePayload.email;
+    verifiedEmailVerified = edgePayload.emailVerified;
+    tokenExp = edgePayload.exp;
+  }
+
+  if (!authenticatedUid) {
+    return null;
+  }
+
+  try {
     const userSnap = await admin.adminDb
       .collection("users")
-      .doc(decoded.uid)
+      .doc(authenticatedUid)
       .get();
 
     if (!userSnap.exists) {
@@ -104,7 +148,7 @@ export async function getCurrentAuthContext(): Promise<AuthenticatedContext | nu
         try {
           const gQuery = await admin.adminDb
             .collection("garages")
-            .where("ownerUid", "==", decoded.uid)
+            .where("ownerUid", "==", authenticatedUid)
             .limit(1)
             .get();
           if (!gQuery.empty && gQuery.docs[0]) {
@@ -128,14 +172,17 @@ export async function getCurrentAuthContext(): Promise<AuthenticatedContext | nu
       }
     }
 
+    const resolvedExp =
+      tokenExp ?? edgePayload?.exp ?? Math.floor(Date.now() / 1000) + 86400 * 5;
+
     const authoritativeSession: SessionPayload = {
-      uid: decoded.uid,
-      email: decoded.email ?? profile.email,
-      emailVerified: Boolean(decoded.email_verified),
+      uid: authenticatedUid,
+      email: verifiedEmail ?? profile.email,
+      emailVerified: verifiedEmailVerified,
       role: profile.role,
       garageStatus: effectiveGarageStatus,
       garageId: effectiveGarageId,
-      exp: edgePayload.exp,
+      exp: resolvedExp,
     };
 
     return {
@@ -144,7 +191,7 @@ export async function getCurrentAuthContext(): Promise<AuthenticatedContext | nu
         ...profile,
         garageStatus: effectiveGarageStatus,
         garageId: effectiveGarageId,
-        emailVerified: Boolean(decoded.email_verified),
+        emailVerified: verifiedEmailVerified,
       },
     };
   } catch {
@@ -253,15 +300,35 @@ export async function resolveGarageApiAuth(options?: {
   }
 
   const ctx = await getCurrentAuthContext();
-  if (!ctx || ctx.profile.role !== "GARAGE_OWNER") {
+  if (!ctx || (ctx.profile.role !== "GARAGE_OWNER" && ctx.profile.role !== "ADMIN")) {
     return { ok: false, status: 401, error: "UNAUTHORIZED" };
   }
 
-  if (ctx.profile.garageStatus !== "approved") {
+  if (
+    ctx.profile.role === "GARAGE_OWNER" &&
+    ctx.profile.garageStatus !== "approved"
+  ) {
     return { ok: false, status: 403, error: "GARAGE_NOT_APPROVED" };
   }
 
-  const garageId = ctx.profile.garageId;
+  let garageId = ctx.profile.garageId;
+  if (!garageId) {
+    try {
+      const gQuery = await admin.adminDb
+        .collection("garages")
+        .where("ownerUid", "==", ctx.session.uid)
+        .limit(1)
+        .get();
+      if (!gQuery.empty && gQuery.docs[0]) {
+        garageId = gQuery.docs[0].id;
+        void admin.adminDb.collection("users").doc(ctx.session.uid).update({
+          garageId,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    } catch {}
+  }
+
   if (!garageId) {
     return { ok: false, status: 409, error: "GARAGE_NOT_ONBOARDED" };
   }

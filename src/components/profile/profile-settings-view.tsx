@@ -267,15 +267,47 @@ export function ProfileSettingsView({
 
   const onSubmitProfile = async (values: UpdateProfileValues) => {
     try {
-      const response = await fetch("/api/user/profile", {
+      const fb = getFirebaseClient();
+      let idToken: string | null = null;
+      if (fb?.auth.currentUser) {
+        try {
+          idToken = await fb.auth.currentUser.getIdToken(false);
+        } catch {}
+      }
+
+      const payload = {
+        ...values,
+        avatarUrl,
+        avatarStoragePath,
+      };
+
+      let response = await fetch("/api/user/profile", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...values,
-          avatarUrl,
-          avatarStoragePath,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify(payload),
       });
+
+      if (response.status === 401 && fb?.auth.currentUser) {
+        try {
+          const freshIdToken = await fb.auth.currentUser.getIdToken(true);
+          await fetch("/api/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken: freshIdToken }),
+          });
+          response = await fetch("/api/user/profile", {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${freshIdToken}`,
+            },
+            body: JSON.stringify(payload),
+          });
+        } catch {}
+      }
 
       if (!response.ok) {
         throw new Error("PROFILE_UPDATE_FAILED");
