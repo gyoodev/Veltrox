@@ -82,7 +82,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   }
 
-  if (!data.storagePath.startsWith(`vehicles/${uid}/${data.vehicleId}/`)) {
+  if (
+    !data.storagePath.startsWith(`vehicles/${uid}/${data.vehicleId}/`) &&
+    !data.storagePath.startsWith("imgbb:") &&
+    !data.storagePath.startsWith("uploads/") &&
+    !data.storagePath.startsWith("public/uploads/") &&
+    !data.storagePath.startsWith("http://") &&
+    !data.storagePath.startsWith("https://") &&
+    !data.storagePath.startsWith("data:")
+  ) {
     return NextResponse.json(
       { error: "FORBIDDEN_STORAGE_PATH" },
       { status: 403 }

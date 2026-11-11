@@ -85,7 +85,14 @@ export async function PATCH(
   // Validate Storage path ownership on drop-off photos
   if (data.dropOffPhotos) {
     const invalidPhoto = data.dropOffPhotos.find(
-      (p) => !p.storagePath.startsWith(`garages/${garageId}/`)
+      (p) =>
+        !p.storagePath.startsWith(`garages/${garageId}/`) &&
+        !p.storagePath.startsWith("imgbb:") &&
+        !p.storagePath.startsWith("uploads/") &&
+        !p.storagePath.startsWith("public/uploads/") &&
+        !p.storagePath.startsWith("http://") &&
+        !p.storagePath.startsWith("https://") &&
+        !p.storagePath.startsWith("data:")
     );
     if (invalidPhoto) {
       return NextResponse.json(

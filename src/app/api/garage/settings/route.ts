@@ -42,9 +42,11 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     data.logoStoragePath &&
     !data.logoStoragePath.startsWith(`garages/${existing.id}/`) &&
     !data.logoStoragePath.startsWith("imgbb:") &&
+    !data.logoStoragePath.startsWith("uploads/") &&
     !data.logoStoragePath.startsWith("public/uploads/") &&
     !data.logoStoragePath.startsWith("http://") &&
-    !data.logoStoragePath.startsWith("https://")
+    !data.logoStoragePath.startsWith("https://") &&
+    !data.logoStoragePath.startsWith("data:")
   ) {
     return NextResponse.json(
       { error: "FORBIDDEN_STORAGE_PATH" },

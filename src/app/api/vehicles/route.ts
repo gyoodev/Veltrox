@@ -69,9 +69,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     data.photoStoragePath &&
     !data.photoStoragePath.startsWith(`vehicles/${uid}/`) &&
     !data.photoStoragePath.startsWith("imgbb:") &&
+    !data.photoStoragePath.startsWith("uploads/") &&
     !data.photoStoragePath.startsWith("public/uploads/") &&
     !data.photoStoragePath.startsWith("http://") &&
-    !data.photoStoragePath.startsWith("https://")
+    !data.photoStoragePath.startsWith("https://") &&
+    !data.photoStoragePath.startsWith("data:")
   ) {
     return NextResponse.json(
       { error: "FORBIDDEN_STORAGE_PATH" },

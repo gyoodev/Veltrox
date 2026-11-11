@@ -60,7 +60,15 @@ export async function PATCH(
   const attachments = data.attachments ?? existing.attachments ?? [];
 
   for (const att of attachments) {
-    if (!att.storagePath.startsWith(`vehicles/${uid}/`)) {
+    if (
+      !att.storagePath.startsWith(`vehicles/${uid}/`) &&
+      !att.storagePath.startsWith("imgbb:") &&
+      !att.storagePath.startsWith("uploads/") &&
+      !att.storagePath.startsWith("public/uploads/") &&
+      !att.storagePath.startsWith("http://") &&
+      !att.storagePath.startsWith("https://") &&
+      !att.storagePath.startsWith("data:")
+    ) {
       return NextResponse.json(
         { error: "FORBIDDEN_STORAGE_PATH" },
         { status: 403 }

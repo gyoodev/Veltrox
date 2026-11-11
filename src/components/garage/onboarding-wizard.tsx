@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   ArrowLeft,
   ArrowRight,
@@ -195,6 +196,27 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
         setLogoPreviewUrl(json.url);
         toast.success("Логото е качено успешно!");
         return { url: json.url, storagePath: json.storagePath };
+      }
+
+      // 3. Fallback directly to Firebase Storage from browser
+      const fb = getFirebaseClient();
+      if (fb?.storage) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const storagePath = `garages/${profile.uid}/logo/${Date.now()}-${safeName}`;
+        const storageRef = ref(fb.storage, storagePath);
+        await uploadBytes(storageRef, file, { contentType: file.type });
+        const url = await getDownloadURL(storageRef);
+        form.setValue("logoUrl", url, {
+          shouldValidate: true,
+          shouldDirty: true,
+        });
+        form.setValue("logoStoragePath", storagePath, {
+          shouldValidate: true,
+          shouldDirty: true,
+        });
+        setLogoPreviewUrl(url);
+        toast.success("Логото е качено успешно!");
+        return { url, storagePath };
       }
     } catch (err) {
       console.warn("Logo upload failed:", err);

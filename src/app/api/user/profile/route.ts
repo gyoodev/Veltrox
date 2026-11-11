@@ -97,9 +97,11 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     data.avatarStoragePath &&
     !data.avatarStoragePath.startsWith(`users/${ctx.session.uid}/avatar/`) &&
     !data.avatarStoragePath.startsWith("imgbb:") &&
+    !data.avatarStoragePath.startsWith("uploads/") &&
     !data.avatarStoragePath.startsWith("public/uploads/") &&
     !data.avatarStoragePath.startsWith("http://") &&
-    !data.avatarStoragePath.startsWith("https://")
+    !data.avatarStoragePath.startsWith("https://") &&
+    !data.avatarStoragePath.startsWith("data:")
   ) {
     return NextResponse.json(
       { error: "FORBIDDEN_STORAGE_PATH" },

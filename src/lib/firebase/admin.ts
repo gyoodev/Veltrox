@@ -194,10 +194,17 @@ export function getFirebaseAdmin(): FirebaseAdminServices | null {
     }
   }
 
+  const adminDb = getFirestore(app);
+  try {
+    adminDb.settings({ ignoreUndefinedProperties: true });
+  } catch {
+    // Settings can only be set once
+  }
+
   cachedAdmin = {
     app,
     adminAuth: getAuth(app),
-    adminDb: getFirestore(app),
+    adminDb,
     adminStorage: getStorage(app),
   };
 

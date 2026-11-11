@@ -84,7 +84,15 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const attachments = data.attachments ?? [];
   for (const att of attachments) {
-    if (!att.storagePath.startsWith(`vehicles/${uid}/${data.vehicleId}/`)) {
+    if (
+      !att.storagePath.startsWith(`vehicles/${uid}/${data.vehicleId}/`) &&
+      !att.storagePath.startsWith("imgbb:") &&
+      !att.storagePath.startsWith("uploads/") &&
+      !att.storagePath.startsWith("public/uploads/") &&
+      !att.storagePath.startsWith("http://") &&
+      !att.storagePath.startsWith("https://") &&
+      !att.storagePath.startsWith("data:")
+    ) {
       return NextResponse.json(
         { error: "FORBIDDEN_STORAGE_PATH" },
         { status: 403 }

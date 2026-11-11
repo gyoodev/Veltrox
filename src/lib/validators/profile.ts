@@ -31,7 +31,20 @@ export const updateProfileSchema = z.object({
     .refine((val) => val === null || val === "" || phoneRegex.test(val), {
       message: "phoneInvalid",
     }),
-  avatarUrl: z.string().url().or(z.literal("")).nullable().optional(),
+  avatarUrl: z
+    .string()
+    .trim()
+    .refine(
+      (val) =>
+        !val ||
+        val.startsWith("/") ||
+        val.startsWith("http://") ||
+        val.startsWith("https://") ||
+        val.startsWith("data:"),
+      { message: "urlInvalid" }
+    )
+    .nullable()
+    .optional(),
   avatarStoragePath: z.string().max(400).nullable().optional(),
   language: z.enum(APP_LOCALES),
   notificationPreferences: notificationPreferencesSchema,
