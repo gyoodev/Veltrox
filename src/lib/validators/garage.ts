@@ -15,6 +15,8 @@ import {
  * under `strict: true` + `noUncheckedIndexedAccess: true`.
  */
 
+export const timeSlotRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 export const workingDaySlotSchema = z.object({
   open: z.string().default("08:30"),
   close: z.string().default("18:00"),
