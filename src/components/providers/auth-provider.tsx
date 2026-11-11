@@ -5,7 +5,6 @@ import {
   onAuthStateChanged,
   signOut as firebaseSignOut,
 } from "firebase/auth";
-import { useRouter } from "next/navigation";
 import {
   createContext,
   type ReactNode,
@@ -55,7 +54,6 @@ export function AuthProvider({
   children: ReactNode;
   initialProfile?: UserProfile | null;
 }) {
-  const router = useRouter();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(initialProfile);
   const [loading, setLoading] = useState<boolean>(
@@ -173,13 +171,14 @@ export function AuthProvider({
       if (client) {
         await firebaseSignOut(client.auth);
       }
+    } catch (err) {
+      console.warn("Sign-out error:", err);
     } finally {
       setProfile(null);
       setFirebaseUser(null);
-      router.push("/");
-      router.refresh();
+      window.location.href = "/login";
     }
-  }, [router]);
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({

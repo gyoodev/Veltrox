@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   EUR_TO_BGN_FIXED_RATE,
+  getFallbackBulgariaFuelPrices,
   type BulgariaFuelCode,
   type BulgariaFuelPricesPayload,
 } from "@/lib/fuel-prices";
@@ -62,18 +63,20 @@ export function BulgariaFuelPricesWidget({
   const t = useTranslations("fuelWidget");
   const locale = useLocale() as AppLocale;
 
-  const [payload, setPayload] = useState<BulgariaFuelPricesPayload | null>(
-    initialData
+  const [payload, setPayload] = useState<BulgariaFuelPricesPayload>(
+    initialData ?? getFallbackBulgariaFuelPrices()
   );
-  const [loading, setLoading] = useState<boolean>(!initialData);
+  const [loading, setLoading] = useState<boolean>(false);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<boolean>(false);
   const [selectedCode, setSelectedCode] = useState<BulgariaFuelCode>("gasoline");
   const [distanceKm, setDistanceKm] = useState<string>("100");
   const [consumption, setConsumption] = useState<string>("7.0");
   const [collapsed, setCollapsed] = useState<boolean>(defaultCollapsed);
+  const [hasMounted, setHasMounted] = useState<boolean>(false);
 
   useEffect(() => {
+    setHasMounted(true);
     try {
       const stored = localStorage.getItem("veltrox_fuel_widget_collapsed");
       if (stored !== null) {
@@ -386,73 +389,77 @@ export function BulgariaFuelPricesWidget({
                   </div>
 
                   <div className="h-36">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart
-                        data={activeFuel.history}
-                        margin={{ top: 6, right: 8, left: -18, bottom: 0 }}
-                      >
-                        <defs>
-                          <linearGradient
-                            id="bgFuelTrendGrad"
-                            x1="0"
-                            y1="0"
-                            x2="0"
-                            y2="1"
-                          >
-                            <stop
-                              offset="5%"
-                              stopColor={FUEL_ACCENTS[activeFuel.code]}
-                              stopOpacity={0.42}
-                            />
-                            <stop
-                              offset="95%"
-                              stopColor={FUEL_ACCENTS[activeFuel.code]}
-                              stopOpacity={0.02}
-                            />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="rgba(148,163,184,0.12)"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="date"
-                          tickFormatter={(val: string) => val.slice(5)}
-                          minTickGap={28}
-                          tick={{ fill: "#94A3B8", fontSize: 11 }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          domain={["auto", "auto"]}
-                          tickFormatter={(v: number) => `€${v.toFixed(2)}`}
-                          tick={{ fill: "#94A3B8", fontSize: 11 }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#0F1629",
-                            borderColor: "rgba(255,255,255,0.12)",
-                            borderRadius: "10px",
-                            color: "#F8FAFC",
-                            fontSize: "12px",
-                          }}
-                          formatter={(val: number) => [
-                            `€${val.toFixed(2)} (${(val * EUR_TO_BGN_FIXED_RATE).toFixed(2)} ${t("bgnShort")})`,
-                            t(`fuels.${activeFuel.code}`),
-                          ]}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="priceEur"
-                          stroke={FUEL_ACCENTS[activeFuel.code]}
-                          strokeWidth={2.2}
-                          fill="url(#bgFuelTrendGrad)"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                    {hasMounted ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={activeFuel.history}
+                          margin={{ top: 6, right: 8, left: -18, bottom: 0 }}
+                        >
+                          <defs>
+                            <linearGradient
+                              id="bgFuelTrendGrad"
+                              x1="0"
+                              y1="0"
+                              x2="0"
+                              y2="1"
+                            >
+                              <stop
+                                offset="5%"
+                                stopColor={FUEL_ACCENTS[activeFuel.code]}
+                                stopOpacity={0.42}
+                              />
+                              <stop
+                                offset="95%"
+                                stopColor={FUEL_ACCENTS[activeFuel.code]}
+                                stopOpacity={0.02}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="rgba(148,163,184,0.12)"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(val: string) => val.slice(5)}
+                            minTickGap={28}
+                            tick={{ fill: "#94A3B8", fontSize: 11 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            domain={["auto", "auto"]}
+                            tickFormatter={(v: number) => `€${v.toFixed(2)}`}
+                            tick={{ fill: "#94A3B8", fontSize: 11 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "#0F1629",
+                              borderColor: "rgba(255,255,255,0.12)",
+                              borderRadius: "10px",
+                              color: "#F8FAFC",
+                              fontSize: "12px",
+                            }}
+                            formatter={(val: number) => [
+                              `€${val.toFixed(2)} (${(val * EUR_TO_BGN_FIXED_RATE).toFixed(2)} ${t("bgnShort")})`,
+                              t(`fuels.${activeFuel.code}`),
+                            ]}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="priceEur"
+                            stroke={FUEL_ACCENTS[activeFuel.code]}
+                            strokeWidth={2.2}
+                            fill="url(#bgFuelTrendGrad)"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-full w-full animate-pulse rounded-lg bg-secondary/30" />
+                    )}
                   </div>
                 </div>
 

@@ -239,6 +239,22 @@ export async function DELETE(): Promise<NextResponse> {
   }
 
   const response = NextResponse.json({ ok: true });
+  response.cookies.set(FB_SESSION_COOKIE, "", {
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
+  response.cookies.set(EDGE_SESSION_COOKIE, "", {
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
   response.cookies.delete(FB_SESSION_COOKIE);
   response.cookies.delete(EDGE_SESSION_COOKIE);
   return response;
