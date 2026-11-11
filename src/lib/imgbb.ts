@@ -104,3 +104,4 @@ export async function uploadImageToImgBB(
     reader.readAsDataURL(file);
   });
 }
+

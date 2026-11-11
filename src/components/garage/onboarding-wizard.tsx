@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { uploadImageToImgBB } from "@/lib/imgbb";
 import {
   ArrowLeft,
   ArrowRight,
@@ -125,106 +125,25 @@ export function OnboardingWizard({ profile }: OnboardingWizardProps) {
   ): Promise<{ url: string; storagePath: string } | null> => {
     setUploadingLogo(true);
     try {
-      const apiKey =
-        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
-        "081c67f1d21a81269c6275b692e61030";
-
-      // 1. Direct ImgBB Cloud upload
-      try {
-        const imgbbForm = new FormData();
-        imgbbForm.append("image", file);
-        imgbbForm.append("name", `garage-logo-${Date.now()}`);
-
-        const imgbbRes = await fetch(
-          `https://api.imgbb.com/1/upload?key=${apiKey}`,
-          {
-            method: "POST",
-            body: imgbbForm,
-          }
-        );
-
-        if (imgbbRes.ok) {
-          const imgbbJson = (await imgbbRes.json()) as {
-            data?: { id: string; url: string; display_url: string };
-            success: boolean;
-          };
-          if (imgbbJson.success && imgbbJson.data) {
-            const cloudUrl = imgbbJson.data.display_url || imgbbJson.data.url;
-            const path = `imgbb:${imgbbJson.data.id}`;
-            form.setValue("logoUrl", cloudUrl, {
-              shouldValidate: true,
-              shouldDirty: true,
-            });
-            form.setValue("logoStoragePath", path, {
-              shouldValidate: true,
-              shouldDirty: true,
-            });
-            setLogoPreviewUrl(cloudUrl);
-            toast.success("Логото е качено успешно!");
-            return { url: cloudUrl, storagePath: path };
-          }
-        }
-      } catch (cloudErr) {
-        console.warn(
-          "Direct logo upload to ImgBB failed, using proxy fallback:",
-          cloudErr
-        );
-      }
-
-      // 2. Server proxy fallback
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/vehicles/upload-photo", {
-        method: "POST",
-        body: formData,
+      const result = await uploadImageToImgBB(file, "garage-logo");
+      form.setValue("logoUrl", result.url, {
+        shouldValidate: true,
+        shouldDirty: true,
       });
-
-      if (res.ok) {
-        const json = (await res.json()) as {
-          ok: boolean;
-          url: string;
-          storagePath: string;
-        };
-        form.setValue("logoUrl", json.url, {
-          shouldValidate: true,
-          shouldDirty: true,
-        });
-        form.setValue("logoStoragePath", json.storagePath, {
-          shouldValidate: true,
-          shouldDirty: true,
-        });
-        setLogoPreviewUrl(json.url);
-        toast.success("Логото е качено успешно!");
-        return { url: json.url, storagePath: json.storagePath };
-      }
-
-      // 3. Fallback directly to Firebase Storage from browser
-      const fb = getFirebaseClient();
-      if (fb?.storage) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const storagePath = `garages/${profile.uid}/logo/${Date.now()}-${safeName}`;
-        const storageRef = ref(fb.storage, storagePath);
-        await uploadBytes(storageRef, file, { contentType: file.type });
-        const url = await getDownloadURL(storageRef);
-        form.setValue("logoUrl", url, {
-          shouldValidate: true,
-          shouldDirty: true,
-        });
-        form.setValue("logoStoragePath", storagePath, {
-          shouldValidate: true,
-          shouldDirty: true,
-        });
-        setLogoPreviewUrl(url);
-        toast.success("Логото е качено успешно!");
-        return { url, storagePath };
-      }
+      form.setValue("logoStoragePath", result.storagePath, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+      setLogoPreviewUrl(result.url);
+      toast.success("Логото е качено успешно!");
+      return result;
     } catch (err) {
       console.warn("Logo upload failed:", err);
       toast.error("Неуспешно качване на логото.");
+      return null;
     } finally {
       setUploadingLogo(false);
     }
-    return null;
   };
 
   const handleLogoFileChange = async (e: ChangeEvent<HTMLInputElement>) => {

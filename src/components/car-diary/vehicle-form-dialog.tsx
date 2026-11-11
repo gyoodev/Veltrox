@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { uploadImageToImgBB } from "@/lib/imgbb";
 import { Camera, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -53,7 +53,7 @@ interface VehicleFormDialogProps {
 export function VehicleFormDialog({
   open,
   onOpenChange,
-  ownerUid,
+  ownerUid: _ownerUid,
   editingVehicle = null,
   onSaved,
 }: VehicleFormDialogProps) {
@@ -144,104 +144,10 @@ export function VehicleFormDialog({
 
     setUploadingPhoto(true);
     try {
-      const apiKey =
-        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
-        "081c67f1d21a81269c6275b692e61030";
-
-      // 1. Primary: Upload directly to ImgBB cloud API from the browser
-      try {
-        const imgbbForm = new FormData();
-        imgbbForm.append("image", file);
-        imgbbForm.append("name", `car-${Date.now()}`);
-
-        const imgbbRes = await fetch(
-          `https://api.imgbb.com/1/upload?key=${apiKey}`,
-          {
-            method: "POST",
-            body: imgbbForm,
-          }
-        );
-
-        if (imgbbRes.ok) {
-          const imgbbJson = (await imgbbRes.json()) as {
-            data?: {
-              id: string;
-              url: string;
-              display_url: string;
-              delete_url: string;
-            };
-            success: boolean;
-            status: number;
-          };
-
-          if (imgbbJson.success && imgbbJson.data) {
-            const cloudUrl =
-              imgbbJson.data.display_url || imgbbJson.data.url;
-            form.setValue("photoUrl", cloudUrl, { shouldDirty: true });
-            form.setValue(
-              "photoStoragePath",
-              `imgbb:${imgbbJson.data.id}`,
-              { shouldDirty: true }
-            );
-            toast.success(t("photoUploadedToast"));
-            return;
-          }
-        }
-      } catch (cloudErr) {
-        console.warn(
-          "Direct browser ImgBB upload failed, trying server proxy:",
-          cloudErr
-        );
-      }
-
-      // 2. Secondary: Upload via server endpoint (which also relays to ImgBB)
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/vehicles/upload-photo", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (res.ok) {
-        const json = (await res.json()) as {
-          ok: boolean;
-          url: string;
-          storagePath: string;
-        };
-        form.setValue("photoUrl", json.url, { shouldDirty: true });
-        form.setValue("photoStoragePath", json.storagePath, {
-          shouldDirty: true,
-        });
-        toast.success(t("photoUploadedToast"));
-        return;
-      }
-
-      // 3. Fallback to Firebase Storage if both ImgBB & local route fail
-      const client = getFirebaseClient();
-      if (client?.storage) {
-        const ext =
-          file.name
-            .split(".")
-            .pop()
-            ?.replace(/[^a-zA-Z0-9]/g, "") || "webp";
-        const folderSegment = editingVehicle?.id ?? "cover";
-        const storagePath = `vehicles/${ownerUid}/${folderSegment}/photo-${Date.now()}.${ext}`;
-        const storageRef = ref(client.storage, storagePath);
-
-        await uploadBytes(storageRef, file, {
-          contentType: file.type,
-          cacheControl: "public,max-age=86400",
-        });
-        const url = await getDownloadURL(storageRef);
-
-        form.setValue("photoUrl", url, { shouldDirty: true });
-        form.setValue("photoStoragePath", storagePath, { shouldDirty: true });
-        toast.success(t("photoUploadedToast"));
-        return;
-      }
-
-      throw new Error("Upload failed");
+      const result = await uploadImageToImgBB(file, "car");
+      form.setValue("photoUrl", result.url, { shouldDirty: true });
+      form.setValue("photoStoragePath", result.storagePath, { shouldDirty: true });
+      toast.success(t("photoUploadedToast"));
     } catch (err) {
       console.error("Vehicle photo upload failed:", err);
       toast.error("Photo upload failed.");

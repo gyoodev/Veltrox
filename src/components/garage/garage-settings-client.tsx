@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { uploadImageToImgBB } from "@/lib/imgbb";
 import {
   Building2,
   Camera,
@@ -89,77 +89,10 @@ export function GarageSettingsClient({
 
     setUploadingLogo(true);
     try {
-      const apiKey =
-        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
-        "081c67f1d21a81269c6275b692e61030";
-
-      // 1. Direct ImgBB Cloud upload
-      try {
-        const imgbbForm = new FormData();
-        imgbbForm.append("image", file);
-        imgbbForm.append("name", `garage-logo-${Date.now()}`);
-
-        const imgbbRes = await fetch(
-          `https://api.imgbb.com/1/upload?key=${apiKey}`,
-          {
-            method: "POST",
-            body: imgbbForm,
-          }
-        );
-
-        if (imgbbRes.ok) {
-          const imgbbJson = (await imgbbRes.json()) as {
-            data?: { id: string; url: string; display_url: string };
-            success: boolean;
-          };
-          if (imgbbJson.success && imgbbJson.data) {
-            const cloudUrl = imgbbJson.data.display_url || imgbbJson.data.url;
-            const path = `imgbb:${imgbbJson.data.id}`;
-            form.setValue("logoUrl", cloudUrl, { shouldDirty: true });
-            form.setValue("logoStoragePath", path, { shouldDirty: true });
-            toast.success("Логото е качено успешно!");
-            return;
-          }
-        }
-      } catch (cloudErr) {
-        console.warn("Direct logo upload to ImgBB failed, using fallback:", cloudErr);
-      }
-
-      // 2. Server proxy fallback
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/vehicles/upload-photo", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (res.ok) {
-        const json = (await res.json()) as {
-          ok: boolean;
-          url: string;
-          storagePath: string;
-        };
-        form.setValue("logoUrl", json.url, { shouldDirty: true });
-        form.setValue("logoStoragePath", json.storagePath, { shouldDirty: true });
-        toast.success("Логото е качено успешно!");
-        return;
-      }
-
-      // 3. Fallback to Firebase Storage
-      const fb = getFirebaseClient();
-      if (fb?.storage) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const storagePath = `garages/${garage.id}/logo/${Date.now()}-${safeName}`;
-        const storageRef = ref(fb.storage, storagePath);
-        await uploadBytes(storageRef, file, { contentType: file.type });
-        const url = await getDownloadURL(storageRef);
-        form.setValue("logoUrl", url, { shouldDirty: true });
-        form.setValue("logoStoragePath", storagePath, { shouldDirty: true });
-        toast.success("Логото е качено успешно!");
-        return;
-      }
-
-      toast.error("Failed to upload logo.");
+      const result = await uploadImageToImgBB(file, "garage-logo");
+      form.setValue("logoUrl", result.url, { shouldDirty: true });
+      form.setValue("logoStoragePath", result.storagePath, { shouldDirty: true });
+      toast.success("Логото е качено успешно!");
     } catch {
       toast.error("Failed to upload logo.");
     } finally {

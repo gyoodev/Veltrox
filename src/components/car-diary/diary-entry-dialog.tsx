@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { uploadImageToImgBB } from "@/lib/imgbb";
 import { FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
@@ -60,7 +60,7 @@ interface DiaryEntryDialogProps {
 export function DiaryEntryDialog({
   open,
   onOpenChange,
-  ownerUid,
+  ownerUid: _ownerUid,
   vehicles,
   defaultVehicleId,
   editingEntry = null,
@@ -141,9 +141,6 @@ export function DiaryEntryDialog({
     setUploading(true);
     try {
       const uploaded: AttachmentItem[] = [];
-      const apiKey =
-        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
-        "081c67f1d21a81269c6275b692e61030";
 
       for (const file of files.slice(0, 6 - attachments.length)) {
         if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type)) {
@@ -155,73 +152,11 @@ export function DiaryEntryDialog({
           continue;
         }
 
-        let directUrl: string | null = null;
-        let storagePath: string | null = null;
-
-        // If file is an image, upload to ImgBB
-        if (file.type.startsWith("image/")) {
-          try {
-            const imgbbForm = new FormData();
-            imgbbForm.append("image", file);
-            imgbbForm.append("name", `diary-${Date.now()}`);
-
-            const imgbbRes = await fetch(
-              `https://api.imgbb.com/1/upload?key=${apiKey}`,
-              { method: "POST", body: imgbbForm }
-            );
-            if (imgbbRes.ok) {
-              const imgbbJson = (await imgbbRes.json()) as {
-                data?: { id: string; url: string; display_url: string };
-                success: boolean;
-              };
-              if (imgbbJson.success && imgbbJson.data) {
-                directUrl = imgbbJson.data.display_url || imgbbJson.data.url;
-                storagePath = `imgbb:${imgbbJson.data.id}`;
-              }
-            }
-          } catch {
-            // fallback
-          }
-
-          if (!directUrl) {
-            try {
-              const proxyForm = new FormData();
-              proxyForm.append("file", file);
-              const proxyRes = await fetch("/api/vehicles/upload-photo", {
-                method: "POST",
-                body: proxyForm,
-              });
-              if (proxyRes.ok) {
-                const proxyJson = (await proxyRes.json()) as {
-                  url: string;
-                  storagePath: string;
-                };
-                directUrl = proxyJson.url;
-                storagePath = proxyJson.storagePath;
-              }
-            } catch {
-              // fallback to Firebase Storage
-            }
-          }
-        }
-
-        // Fallback to Firebase Storage if direct cloud upload not used or failed
-        if (!directUrl || !storagePath) {
-          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-          storagePath = `vehicles/${ownerUid}/${watchedVehicleId}/diary/${Date.now()}-${safeName}`;
-          const storageRef = ref(client.storage, storagePath);
-
-          await uploadBytes(storageRef, file, {
-            contentType: file.type,
-            cacheControl: "private,max-age=86400",
-          });
-          directUrl = await getDownloadURL(storageRef);
-        }
-
+        const result = await uploadImageToImgBB(file, "diary");
         uploaded.push({
           name: file.name,
-          url: directUrl,
-          storagePath,
+          url: result.url,
+          storagePath: result.storagePath,
           contentType: file.type,
         });
       }

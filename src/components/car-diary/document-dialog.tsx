@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { uploadImageToImgBB } from "@/lib/imgbb";
 import { FolderLock, Loader2, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
@@ -58,7 +58,7 @@ interface DocumentDialogProps {
 export function DocumentDialog({
   open,
   onOpenChange,
-  ownerUid,
+  ownerUid: _ownerUid,
   vehicles,
   defaultVehicleId,
   onSaved,
@@ -133,76 +133,13 @@ export function DocumentDialog({
       return;
     }
 
-    const client = getFirebaseClient();
-    if (!client) return;
-
     setUploading(true);
     try {
-      let directUrl: string | null = null;
-      let storagePath: string | null = null;
-
-      const apiKey =
-        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
-        "081c67f1d21a81269c6275b692e61030";
-
-      if (file.type.startsWith("image/")) {
-        try {
-          const imgbbForm = new FormData();
-          imgbbForm.append("image", file);
-          imgbbForm.append("name", `doc-${Date.now()}`);
-
-          const imgbbRes = await fetch(
-            `https://api.imgbb.com/1/upload?key=${apiKey}`,
-            { method: "POST", body: imgbbForm }
-          );
-          if (imgbbRes.ok) {
-            const imgbbJson = (await imgbbRes.json()) as {
-              data?: { id: string; url: string; display_url: string };
-              success: boolean;
-            };
-            if (imgbbJson.success && imgbbJson.data) {
-              directUrl = imgbbJson.data.display_url || imgbbJson.data.url;
-              storagePath = `imgbb:${imgbbJson.data.id}`;
-            }
-          }
-        } catch {}
-
-        if (!directUrl) {
-          try {
-            const proxyForm = new FormData();
-            proxyForm.append("file", file);
-            const proxyRes = await fetch("/api/vehicles/upload-photo", {
-              method: "POST",
-              body: proxyForm,
-            });
-            if (proxyRes.ok) {
-              const proxyJson = (await proxyRes.json()) as {
-                url: string;
-                storagePath: string;
-              };
-              directUrl = proxyJson.url;
-              storagePath = proxyJson.storagePath;
-            }
-          } catch {}
-        }
-      }
-
-      if (!directUrl || !storagePath) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80);
-        storagePath = `vehicles/${ownerUid}/${watchedVehicleId}/documents/${Date.now()}-${safeName}`;
-        const storageRef = ref(client.storage, storagePath);
-
-        await uploadBytes(storageRef, file, {
-          contentType: file.type,
-          cacheControl: "private,max-age=86400",
-        });
-        directUrl = await getDownloadURL(storageRef);
-      }
-
+      const result = await uploadImageToImgBB(file, "doc");
       form.setValue("fileName", file.name, { shouldValidate: true });
       form.setValue("contentType", file.type, { shouldValidate: true });
-      form.setValue("fileUrl", directUrl, { shouldValidate: true });
-      form.setValue("storagePath", storagePath, { shouldValidate: true });
+      form.setValue("fileUrl", result.url, { shouldValidate: true });
+      form.setValue("storagePath", result.storagePath, { shouldValidate: true });
       if (!form.getValues("title")) {
         form.setValue("title", file.name.replace(/\.[^.]+$/, ""), {
           shouldValidate: true,

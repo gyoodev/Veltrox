@@ -1,6 +1,6 @@
 "use client";
 
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { uploadImageToImgBB } from "@/lib/imgbb";
 import {
   ArrowLeft,
   BellRing,
@@ -268,70 +268,14 @@ export function WorkOrderDetailClient({
 
     setUploadingPhoto(true);
     try {
-      let directUrl: string | null = null;
-      let storagePath: string | null = null;
-
-      const apiKey =
-        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
-        "081c67f1d21a81269c6275b692e61030";
-
-      // 1. Direct ImgBB Cloud upload
-      try {
-        const imgbbForm = new FormData();
-        imgbbForm.append("image", file);
-        imgbbForm.append("name", `work-order-${wo.id}-${Date.now()}`);
-
-        const imgbbRes = await fetch(
-          `https://api.imgbb.com/1/upload?key=${apiKey}`,
-          { method: "POST", body: imgbbForm }
-        );
-        if (imgbbRes.ok) {
-          const imgbbJson = (await imgbbRes.json()) as {
-            data?: { id: string; url: string; display_url: string };
-            success: boolean;
-          };
-          if (imgbbJson.success && imgbbJson.data) {
-            directUrl = imgbbJson.data.display_url || imgbbJson.data.url;
-            storagePath = `imgbb:${imgbbJson.data.id}`;
-          }
-        }
-      } catch {}
-
-      // 2. Server proxy fallback
-      if (!directUrl) {
-        try {
-          const proxyForm = new FormData();
-          proxyForm.append("file", file);
-          const proxyRes = await fetch("/api/vehicles/upload-photo", {
-            method: "POST",
-            body: proxyForm,
-          });
-          if (proxyRes.ok) {
-            const proxyJson = (await proxyRes.json()) as {
-              url: string;
-              storagePath: string;
-            };
-            directUrl = proxyJson.url;
-            storagePath = proxyJson.storagePath;
-          }
-        } catch {}
-      }
-
-      // 3. Fallback to Firebase Storage
-      if (!directUrl || !storagePath) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        storagePath = `garages/${garage.id}/workOrders/${wo.id}/${Date.now()}-${safeName}`;
-        const storageRef = ref(fb.storage, storagePath);
-        await uploadBytes(storageRef, file, { contentType: file.type });
-        directUrl = await getDownloadURL(storageRef);
-      }
+      const result = await uploadImageToImgBB(file, "work-order");
 
       const nextPhotos: AttachmentItem[] = [
         ...photos,
         {
           name: file.name,
-          url: directUrl,
-          storagePath,
+          url: result.url,
+          storagePath: result.storagePath,
           contentType: file.type,
         },
       ];

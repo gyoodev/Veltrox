@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { uploadImageToImgBB } from "@/lib/imgbb";
 import {
   AlertTriangle,
   Bell,
@@ -149,104 +149,14 @@ export function ProfileSettingsView({
 
     setUploadingAvatar(true);
     try {
-      const apiKey =
-        process.env.NEXT_PUBLIC_IMGBB_API_KEY ||
-        "081c67f1d21a81269c6275b692e61030";
-
-      // 1. Direct ImgBB Cloud upload
-      try {
-        const imgbbForm = new FormData();
-        imgbbForm.append("image", file);
-        imgbbForm.append("name", `avatar-${Date.now()}`);
-
-        const imgbbRes = await fetch(
-          `https://api.imgbb.com/1/upload?key=${apiKey}`,
-          {
-            method: "POST",
-            body: imgbbForm,
-          }
-        );
-
-        if (imgbbRes.ok) {
-          const imgbbJson = (await imgbbRes.json()) as {
-            data?: {
-              id: string;
-              url: string;
-              display_url: string;
-            };
-            success: boolean;
-          };
-
-          if (imgbbJson.success && imgbbJson.data) {
-            const cloudUrl = imgbbJson.data.display_url || imgbbJson.data.url;
-            setAvatarUrl(cloudUrl);
-            setAvatarStoragePath(`imgbb:${imgbbJson.data.id}`);
-            profileForm.setValue("avatarUrl", cloudUrl, { shouldDirty: true });
-            profileForm.setValue(
-              "avatarStoragePath",
-              `imgbb:${imgbbJson.data.id}`,
-              { shouldDirty: true }
-            );
-            toast.success(t("avatarUploadedToast"));
-            return;
-          }
-        }
-      } catch (cloudErr) {
-        console.warn(
-          "Direct avatar upload to ImgBB failed, trying backend:",
-          cloudErr
-        );
-      }
-
-      // 2. Server proxy upload (relays to ImgBB or local storage)
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/vehicles/upload-photo", {
-        method: "POST",
-        body: formData,
+      const result = await uploadImageToImgBB(file, "avatar");
+      setAvatarUrl(result.url);
+      setAvatarStoragePath(result.storagePath);
+      profileForm.setValue("avatarUrl", result.url, { shouldDirty: true });
+      profileForm.setValue("avatarStoragePath", result.storagePath, {
+        shouldDirty: true,
       });
-
-      if (res.ok) {
-        const json = (await res.json()) as {
-          ok: boolean;
-          url: string;
-          storagePath: string;
-        };
-        setAvatarUrl(json.url);
-        setAvatarStoragePath(json.storagePath);
-        profileForm.setValue("avatarUrl", json.url, { shouldDirty: true });
-        profileForm.setValue("avatarStoragePath", json.storagePath, {
-          shouldDirty: true,
-        });
-        toast.success(t("avatarUploadedToast"));
-        return;
-      }
-
-      // 3. Fallback to Firebase Storage
-      const client = getFirebaseClient();
-      if (client?.storage) {
-        const ext =
-          file.name.split(".").pop()?.replace(/[^a-zA-Z0-9]/g, "") || "webp";
-        const safePath = `users/${initialProfile.uid}/avatar/avatar-${Date.now()}.${ext}`;
-        const storageRef = ref(client.storage, safePath);
-
-        await uploadBytes(storageRef, file, {
-          contentType: file.type,
-          cacheControl: "public,max-age=86400",
-        });
-        const downloadUrl = await getDownloadURL(storageRef);
-
-        setAvatarUrl(downloadUrl);
-        setAvatarStoragePath(safePath);
-        profileForm.setValue("avatarUrl", downloadUrl, { shouldDirty: true });
-        profileForm.setValue("avatarStoragePath", safePath, {
-          shouldDirty: true,
-        });
-        toast.success(t("avatarUploadedToast"));
-        return;
-      }
-
-      throw new Error("Upload failed");
+      toast.success(t("avatarUploadedToast"));
     } catch (err) {
       console.error("Avatar upload failed:", err);
       toast.error(t("saveErrorToast"));
