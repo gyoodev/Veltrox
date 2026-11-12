@@ -67,13 +67,19 @@ export async function getCurrentAuthContext(): Promise<AuthenticatedContext | nu
   }
 
   // 2. Check session cookies
-  const cookieStore = await cookies();
-  const fbSessionCookie = cookieStore.get(FB_SESSION_COOKIE)?.value;
-  const edgeCookie = cookieStore.get(EDGE_SESSION_COOKIE)?.value;
-
+  let fbSessionCookie: string | undefined;
+  let edgeCookie: string | undefined;
   let edgePayload: SessionPayload | null = null;
-  if (edgeCookie) {
-    edgePayload = await verifyEdgeSession(edgeCookie);
+  try {
+    const cookieStore = await cookies();
+    fbSessionCookie = cookieStore.get(FB_SESSION_COOKIE)?.value;
+    edgeCookie = cookieStore.get(EDGE_SESSION_COOKIE)?.value;
+
+    if (edgeCookie) {
+      edgePayload = await verifyEdgeSession(edgeCookie);
+    }
+  } catch {
+    // Non-fatal if cookies() or edge verification fails
   }
 
   if (!authenticatedUid && fbSessionCookie) {

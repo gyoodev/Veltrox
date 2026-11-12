@@ -19,6 +19,34 @@ interface ResolvedServiceAccount {
   privateKey: string;
 }
 
+function normalizePrivateKey(raw: string): string {
+  let key = raw.trim();
+  while (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1).trim();
+  }
+  if (
+    !key.includes("-----BEGIN") &&
+    /^[A-Za-z0-9+/=]+$/.test(key) &&
+    key.length > 100
+  ) {
+    try {
+      const decoded = Buffer.from(key, "base64").toString("utf8");
+      if (decoded.includes("-----BEGIN")) {
+        key = decoded;
+      }
+    } catch {
+      // Keep original string
+    }
+  }
+  return key
+    .replace(/\\\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\r\n/g, "\n");
+}
+
 function parseServiceAccountJsonString(
   rawJson: string
 ): ResolvedServiceAccount | null {
@@ -36,7 +64,7 @@ function parseServiceAccountJsonString(
       return {
         projectId: parsed.project_id,
         clientEmail: parsed.client_email,
-        privateKey: parsed.private_key.replace(/\\n/g, "\n"),
+        privateKey: normalizePrivateKey(parsed.private_key),
       };
     }
   } catch {
@@ -53,22 +81,20 @@ function resolveServiceAccountCredentials(): ResolvedServiceAccount | null {
   ).trim();
   const envClientEmail = (process.env.FIREBASE_CLIENT_EMAIL || "").trim();
   const rawPrivateKey = (process.env.FIREBASE_PRIVATE_KEY || "").trim();
-  const unquotedPrivateKey =
-    (rawPrivateKey.startsWith('"') && rawPrivateKey.endsWith('"')) ||
-    (rawPrivateKey.startsWith("'") && rawPrivateKey.endsWith("'"))
-      ? rawPrivateKey.slice(1, -1)
-      : rawPrivateKey;
+  const normalizedPrivateKey = rawPrivateKey
+    ? normalizePrivateKey(rawPrivateKey)
+    : "";
 
   if (
     envProjectId &&
     envClientEmail &&
-    unquotedPrivateKey &&
-    !unquotedPrivateKey.includes("YOUR_PRIVATE_KEY_HERE")
+    normalizedPrivateKey &&
+    !normalizedPrivateKey.includes("YOUR_PRIVATE_KEY_HERE")
   ) {
     return {
       projectId: envProjectId,
       clientEmail: envClientEmail,
-      privateKey: unquotedPrivateKey.replace(/\\n/g, "\n"),
+      privateKey: normalizedPrivateKey,
     };
   }
 
@@ -155,58 +181,63 @@ export function getFirebaseAdmin(): FirebaseAdminServices | null {
     return cachedAdmin;
   }
 
-  const creds = resolveServiceAccountCredentials();
-  const fallbackProjectId =
-    process.env.FIREBASE_PROJECT_ID ||
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-  const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-
-  let app: App | undefined = getApps()[0];
-
-  if (!app) {
-    if (creds) {
-      app = initializeApp({
-        credential: cert({
-          projectId: creds.projectId,
-          clientEmail: creds.clientEmail,
-          privateKey: creds.privateKey,
-        }),
-        projectId: creds.projectId,
-        ...(storageBucket ? { storageBucket } : {}),
-      });
-    } else if (
-      process.env.FIRESTORE_EMULATOR_HOST ||
-      process.env.FIREBASE_AUTH_EMULATOR_HOST
-    ) {
-      if (!fallbackProjectId) return null;
-      app = initializeApp({
-        projectId: fallbackProjectId,
-        ...(storageBucket ? { storageBucket } : {}),
-      });
-    } else if (process.env.K_SERVICE || process.env.FIREBASE_CONFIG) {
-      app = initializeApp({
-        credential: applicationDefault(),
-        ...(fallbackProjectId ? { projectId: fallbackProjectId } : {}),
-        ...(storageBucket ? { storageBucket } : {}),
-      });
-    } else {
-      return null;
-    }
-  }
-
-  const adminDb = getFirestore(app);
   try {
-    adminDb.settings({ ignoreUndefinedProperties: true });
-  } catch {
-    // Settings can only be set once
+    const creds = resolveServiceAccountCredentials();
+    const fallbackProjectId =
+      process.env.FIREBASE_PROJECT_ID ||
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+
+    let app: App | undefined = getApps()[0];
+
+    if (!app) {
+      if (creds) {
+        app = initializeApp({
+          credential: cert({
+            projectId: creds.projectId,
+            clientEmail: creds.clientEmail,
+            privateKey: creds.privateKey,
+          }),
+          projectId: creds.projectId,
+          ...(storageBucket ? { storageBucket } : {}),
+        });
+      } else if (
+        process.env.FIRESTORE_EMULATOR_HOST ||
+        process.env.FIREBASE_AUTH_EMULATOR_HOST
+      ) {
+        if (!fallbackProjectId) return null;
+        app = initializeApp({
+          projectId: fallbackProjectId,
+          ...(storageBucket ? { storageBucket } : {}),
+        });
+      } else if (process.env.K_SERVICE || process.env.FIREBASE_CONFIG) {
+        app = initializeApp({
+          credential: applicationDefault(),
+          ...(fallbackProjectId ? { projectId: fallbackProjectId } : {}),
+          ...(storageBucket ? { storageBucket } : {}),
+        });
+      } else {
+        return null;
+      }
+    }
+
+    const adminDb = getFirestore(app);
+    try {
+      adminDb.settings({ ignoreUndefinedProperties: true });
+    } catch {
+      // Settings can only be set once
+    }
+
+    cachedAdmin = {
+      app,
+      adminAuth: getAuth(app),
+      adminDb,
+      adminStorage: getStorage(app),
+    };
+
+    return cachedAdmin;
+  } catch (err) {
+    console.error("[getFirebaseAdmin] Initialization error:", err);
+    return null;
   }
-
-  cachedAdmin = {
-    app,
-    adminAuth: getAuth(app),
-    adminDb,
-    adminStorage: getStorage(app),
-  };
-
-  return cachedAdmin;
 }
