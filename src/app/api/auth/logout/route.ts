@@ -72,3 +72,4 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   response.cookies.set(EDGE_SESSION_COOKIE, "", clearCookieOptions);
   return response;
 }
+
