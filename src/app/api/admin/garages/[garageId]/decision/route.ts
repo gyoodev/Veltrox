@@ -9,7 +9,7 @@ import type { UserProfile } from "@/types/domain";
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ userId: string }> }
+  context: { params: Promise<{ garageId: string }> }
 ): Promise<NextResponse> {
   const auth = await resolveAdminApiAuth();
   if (!auth.ok) {
@@ -24,7 +24,8 @@ export async function POST(
     );
   }
 
-  const { userId } = await context.params;
+  // Segment uses [garageId] to match sibling [garageId]/route.ts; callers pass the owner's UID here.
+  const { garageId: userId } = await context.params;
   const body = await request.json().catch(() => null);
   const parsed = garageDecisionSchema.safeParse(body);
   if (!parsed.success) {
