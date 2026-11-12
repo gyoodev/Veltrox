@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
 import { AlertCircle, Loader2, LogIn } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -37,6 +37,8 @@ function mapFirebaseErrorCode(
     case "auth/too-many-requests":
       return "tooManyRequests";
     case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+    case "auth/popup-blocked":
       return "popupClosed";
     case "auth/operation-not-allowed":
     case "auth/configuration-not-found":
@@ -51,7 +53,6 @@ function mapFirebaseErrorCode(
 function LoginFormContent() {
   const t = useTranslations("auth");
   const tVal = useTranslations("validation");
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { isConfigured, syncServerSession } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -90,8 +91,7 @@ function LoginFormContent() {
         values.password
       );
       const { redirectTo } = await syncServerSession(credential.user);
-      router.push(resolveSafeRedirect(redirectTo));
-      router.refresh();
+      window.location.href = resolveSafeRedirect(redirectTo);
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       const message = (err as { message?: string })?.message;
@@ -114,9 +114,9 @@ function LoginFormContent() {
         client.googleProvider
       );
       const { redirectTo } = await syncServerSession(credential.user);
-      router.push(resolveSafeRedirect(redirectTo));
-      router.refresh();
+      window.location.href = resolveSafeRedirect(redirectTo);
     } catch (err: unknown) {
+      console.error("[Login Google error]:", err);
       const code = (err as { code?: string })?.code;
       const message = (err as { message?: string })?.message;
       const errKey = mapFirebaseErrorCode(code, message);

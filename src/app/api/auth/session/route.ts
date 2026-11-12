@@ -224,7 +224,13 @@ export async function POST(request: Request): Promise<NextResponse> {
  * Signs the user out server-side, revokes Firebase refresh tokens when possible,
  * and clears both session cookies across all paths.
  */
-export async function DELETE(): Promise<NextResponse> {
+export async function DELETE(request: Request): Promise<NextResponse> {
+  const isProd = process.env.NODE_ENV === "production";
+  const isHttps =
+    request.headers.get("x-forwarded-proto") === "https" ||
+    request.url.startsWith("https://") ||
+    isProd;
+
   try {
     const cookieStore = await cookies();
     const fbCookie = cookieStore.get(FB_SESSION_COOKIE)?.value;
@@ -232,10 +238,14 @@ export async function DELETE(): Promise<NextResponse> {
 
     if (fbCookie && admin) {
       try {
-        const decoded = await admin.adminAuth.verifySessionCookie(fbCookie, false);
-        if (decoded?.sub) {
-          await admin.adminAuth.revokeRefreshTokens(decoded.sub);
-        }
+        const revokePromise = (async () => {
+          const decoded = await admin.adminAuth.verifySessionCookie(fbCookie, false);
+          if (decoded?.sub) {
+            await admin.adminAuth.revokeRefreshTokens(decoded.sub);
+          }
+        })();
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000));
+        await Promise.race([revokePromise, timeoutPromise]);
       } catch {
         // Ignore expired/invalid cookie during sign-out cleanup
       }
@@ -245,20 +255,18 @@ export async function DELETE(): Promise<NextResponse> {
   }
 
   const response = NextResponse.json({ ok: true });
-  const isProd = process.env.NODE_ENV === "production";
   const clearCookieOptions = {
     path: "/",
     maxAge: 0,
     expires: new Date(0),
     httpOnly: true,
-    secure: isProd,
+    secure: isHttps,
     sameSite: "lax" as const,
   };
 
   response.cookies.set(FB_SESSION_COOKIE, "", clearCookieOptions);
   response.cookies.set(EDGE_SESSION_COOKIE, "", clearCookieOptions);
-  response.cookies.delete(FB_SESSION_COOKIE);
-  response.cookies.delete(EDGE_SESSION_COOKIE);
+
   return response;
 }
 

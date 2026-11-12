@@ -16,7 +16,7 @@ import {
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -36,7 +36,6 @@ import type { RegistrableRole } from "@/types/domain";
 function RegisterFormContent() {
   const t = useTranslations("auth");
   const tVal = useTranslations("validation");
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { isConfigured, syncServerSession } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -90,8 +89,7 @@ function RegisterFormContent() {
         forceRefresh: true,
       });
 
-      router.push(redirectTo);
-      router.refresh();
+      window.location.href = redirectTo;
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       const message = (err as { message?: string })?.message;
@@ -135,8 +133,7 @@ function RegisterFormContent() {
         requestedRole: selectedRole,
         forceRefresh: true,
       });
-      router.push(redirectTo);
-      router.refresh();
+      window.location.href = redirectTo;
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       const message = (err as { message?: string })?.message;

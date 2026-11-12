@@ -193,8 +193,17 @@ export async function DELETE(request: Request): Promise<NextResponse> {
     await admin.adminAuth.deleteUser(uid);
 
     const response = NextResponse.json({ deleted: true });
-    response.cookies.delete(FB_SESSION_COOKIE);
-    response.cookies.delete(EDGE_SESSION_COOKIE);
+    const isProd = process.env.NODE_ENV === "production";
+    const clearCookieOptions = {
+      path: "/",
+      maxAge: 0,
+      expires: new Date(0),
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "lax" as const,
+    };
+    response.cookies.set(FB_SESSION_COOKIE, "", clearCookieOptions);
+    response.cookies.set(EDGE_SESSION_COOKIE, "", clearCookieOptions);
     return response;
   } catch (err: unknown) {
     console.error("[DELETE /api/user/account] Error:", err);

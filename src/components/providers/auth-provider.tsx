@@ -141,6 +141,25 @@ export function AuthProvider({
     }
 
     const unsubscribe = onAuthStateChanged(client.auth, async (user) => {
+      // If force=1 is present in the query string, user explicitly requested a fresh unauthenticated session
+      const isForceSignout =
+        typeof window !== "undefined" &&
+        window.location.search.includes("force=1");
+
+      if (isForceSignout) {
+        if (user) {
+          try {
+            await firebaseSignOut(client.auth);
+          } catch {
+            // Ignore
+          }
+        }
+        setFirebaseUser(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
       setFirebaseUser(user);
       if (!user) {
         setProfile(null);
@@ -165,29 +184,28 @@ export function AuthProvider({
   }, []);
 
   const signOut = useCallback(async () => {
-    const client = getFirebaseClient();
-
-    // 1. First: ALWAYS sign out from Firebase client SDK to clear Google/OAuth token from browser
-    if (client?.auth) {
-      try {
-        await firebaseSignOut(client.auth);
-      } catch (fbErr) {
-        console.warn("Firebase client signOut error:", fbErr);
-      }
-    }
-
-    // 2. Clear React client state immediately
+    // 1. Immediately wipe React client state
     setProfile(null);
     setFirebaseUser(null);
 
-    // 3. Clear server session cookies
+    // 2. Clear Firebase client SDK (Google OAuth / Password tokens in IndexedDB & memory)
+    try {
+      const client = getFirebaseClient();
+      if (client?.auth) {
+        await firebaseSignOut(client.auth);
+      }
+    } catch (fbErr) {
+      console.warn("Firebase client signOut error:", fbErr);
+    }
+
+    // 3. Clear server session cookies across all handlers
     try {
       await fetch("/api/auth/session", { method: "DELETE" });
     } catch (err) {
       console.warn("Sign-out server cookie delete error:", err);
     }
 
-    // 4. Force browser navigation to /login with ?force=1 to prevent middleware workspace bounce
+    // 4. Force hard browser navigation to /login?force=1 which triggers middleware cookie destruction and client purge
     window.location.href = "/login?force=1";
   }, []);
 

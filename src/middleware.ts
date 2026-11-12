@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { isValidLocale, LOCALE_COOKIE_NAME } from "@/i18n/config";
 import {
   EDGE_SESSION_COOKIE,
+  FB_SESSION_COOKIE,
   getRoleHomePath,
   verifyEdgeSession,
 } from "@/lib/auth/edge-session";
@@ -30,6 +31,30 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return res;
   };
 
+  const isProd = process.env.NODE_ENV === "production";
+  const isHttps =
+    request.headers.get("x-forwarded-proto") === "https" ||
+    request.url.startsWith("https://") ||
+    isProd;
+
+  const clearCookieOptions = {
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: "lax" as const,
+  };
+
+  // Immediate logout route
+  if (pathname === "/logout") {
+    const loginUrl = new URL("/login", request.url);
+    const res = NextResponse.redirect(loginUrl);
+    res.cookies.set(EDGE_SESSION_COOKIE, "", clearCookieOptions);
+    res.cookies.set(FB_SESSION_COOKIE, "", clearCookieOptions);
+    return applyLocaleCookie(res);
+  }
+
   const sessionToken = request.cookies.get(EDGE_SESSION_COOKIE)?.value;
   const session = await verifyEdgeSession(sessionToken);
 
@@ -40,6 +65,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const isProtectedRoute = isUserRoute || isGarageRoute || isAdminRoute;
 
   const isGuestAuthRoute = pathname === "/login" || pathname === "/register";
+
+  // If force=1 is passed on login or register, explicitly wipe cookies on response
+  if (isGuestAuthRoute && searchParams.get("force") === "1") {
+    const res = NextResponse.next();
+    res.cookies.set(EDGE_SESSION_COOKIE, "", clearCookieOptions);
+    res.cookies.set(FB_SESSION_COOKIE, "", clearCookieOptions);
+    return applyLocaleCookie(res);
+  }
 
   if (isProtectedRoute && !session) {
     const loginUrl = new URL("/login", request.url);
