@@ -66,9 +66,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   const isGuestAuthRoute = pathname === "/login" || pathname === "/register";
 
-  // If force=1 is passed on login or register, explicitly wipe cookies on response
+  // If force=1 is passed on login or register, explicitly wipe cookies and cleanly redirect without the param
   if (isGuestAuthRoute && searchParams.get("force") === "1") {
-    const res = NextResponse.next();
+    const cleanUrl = new URL(pathname, request.url);
+    const params = new URLSearchParams(searchParams);
+    params.delete("force");
+    const query = params.toString();
+    cleanUrl.search = query ? `?${query}` : "";
+    const res = NextResponse.redirect(cleanUrl);
     res.cookies.set(EDGE_SESSION_COOKIE, "", clearCookieOptions);
     res.cookies.set(FB_SESSION_COOKIE, "", clearCookieOptions);
     return applyLocaleCookie(res);

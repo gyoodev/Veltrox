@@ -6,7 +6,7 @@ import { AlertCircle, Loader2, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -56,6 +56,19 @@ function LoginFormContent() {
   const searchParams = useSearchParams();
   const { isConfigured, syncServerSession } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("force") === "1") {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete("force");
+      const search = cleanUrl.searchParams.toString();
+      window.history.replaceState(
+        null,
+        "",
+        cleanUrl.pathname + (search ? `?${search}` : "")
+      );
+    }
+  }, [searchParams]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),

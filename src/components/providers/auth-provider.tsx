@@ -141,25 +141,6 @@ export function AuthProvider({
     }
 
     const unsubscribe = onAuthStateChanged(client.auth, async (user) => {
-      // If force=1 is present in the query string, user explicitly requested a fresh unauthenticated session
-      const isForceSignout =
-        typeof window !== "undefined" &&
-        window.location.search.includes("force=1");
-
-      if (isForceSignout) {
-        if (user) {
-          try {
-            await firebaseSignOut(client.auth);
-          } catch {
-            // Ignore
-          }
-        }
-        setFirebaseUser(null);
-        setProfile(null);
-        setLoading(false);
-        return;
-      }
-
       setFirebaseUser(user);
       if (!user) {
         setProfile(null);
@@ -205,8 +186,8 @@ export function AuthProvider({
       console.warn("Sign-out server cookie delete error:", err);
     }
 
-    // 4. Force hard browser navigation to /login?force=1 which triggers middleware cookie destruction and client purge
-    window.location.href = "/login?force=1";
+    // 4. Clean navigation to /login
+    window.location.href = "/login";
   }, []);
 
   const value = useMemo<AuthContextValue>(
