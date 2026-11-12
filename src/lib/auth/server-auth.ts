@@ -9,6 +9,7 @@ import {
   verifyEdgeSession,
 } from "@/lib/auth/edge-session";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { toPlainFirestoreData } from "@/lib/firebase/serialize";
 import type {
   Garage,
   GarageStaff,
@@ -193,12 +194,12 @@ export async function getCurrentAuthContext(): Promise<AuthenticatedContext | nu
 
     return {
       session: authoritativeSession,
-      profile: {
+      profile: toPlainFirestoreData({
         ...profile,
         garageStatus: effectiveGarageStatus,
         garageId: effectiveGarageId,
         emailVerified: verifiedEmailVerified,
-      },
+      }),
     };
   } catch {
     return null;

@@ -32,9 +32,10 @@ export function formatCurrency(
 }
 
 export function formatDate(
-  isoDate: string,
+  isoDate: string | null | undefined,
   locale: AppLocale = "bg"
 ): string {
+  if (!isoDate) return "—";
   const date = new Date(isoDate);
   if (Number.isNaN(date.getTime())) return isoDate;
   return new Intl.DateTimeFormat(locale === "bg" ? "bg-BG" : "en-GB", {

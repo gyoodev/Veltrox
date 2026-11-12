@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { toPlainFirestoreData } from "@/lib/firebase/serialize";
 import type { PlatformSettingsConfig } from "@/types/domain";
 
 export function getDefaultPlatformSettings(): PlatformSettingsConfig {
@@ -34,7 +35,9 @@ export async function getPlatformSettings(): Promise<PlatformSettingsConfig> {
       return getDefaultPlatformSettings();
     }
 
-    const data = snap.data() as Partial<PlatformSettingsConfig>;
+    const data = toPlainFirestoreData(
+      snap.data() as Partial<PlatformSettingsConfig>
+    );
     const defaults = getDefaultPlatformSettings();
 
     return {

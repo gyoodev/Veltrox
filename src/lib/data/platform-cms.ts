@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { toPlainFirestoreData } from "@/lib/firebase/serialize";
 import type { PlatformContentConfig } from "@/types/domain";
 
 export function getDefaultPlatformContent(): PlatformContentConfig {
@@ -36,7 +37,9 @@ export async function getPublicPlatformCms(): Promise<PlatformContentConfig> {
       return getDefaultPlatformContent();
     }
 
-    const raw = snap.data() as Partial<PlatformContentConfig>;
+    const raw = toPlainFirestoreData(
+      snap.data() as Partial<PlatformContentConfig>
+    );
     return {
       banner: {
         enabled: Boolean(raw.banner?.enabled),

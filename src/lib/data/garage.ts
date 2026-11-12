@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { toPlainDoc, toPlainFirestoreData } from "@/lib/firebase/serialize";
 import { maskLicensePlate } from "@/lib/garage-utils";
 import { normalizeLicensePlate } from "@/lib/validators/entities";
 import type {
@@ -80,31 +81,43 @@ export async function getGarageWorkspaceBundle(
   ]);
 
   const customers = customersSnap.docs
-    .map((d) => ({ ...(d.data() as Customer), id: d.id }))
+    .map((d) => toPlainDoc<Customer & Record<string, unknown>>(d))
     .sort((a, b) =>
-      (b.lastVisitAt ?? b.createdAt).localeCompare(a.lastVisitAt ?? a.createdAt)
+      String(b.lastVisitAt ?? b.createdAt ?? "").localeCompare(
+        String(a.lastVisitAt ?? a.createdAt ?? "")
+      )
     );
 
   const workOrders = workOrdersSnap.docs
-    .map((d) => ({ ...(d.data() as WorkOrder), id: d.id }))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .map((d) => toPlainDoc<WorkOrder & Record<string, unknown>>(d))
+    .sort((a, b) =>
+      String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+    );
 
   const appointments = appointmentsSnap.docs
-    .map((d) => ({ ...(d.data() as Appointment), id: d.id }))
-    .sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart));
+    .map((d) => toPlainDoc<Appointment & Record<string, unknown>>(d))
+    .sort((a, b) =>
+      String(a.scheduledStart ?? "").localeCompare(String(b.scheduledStart ?? ""))
+    );
 
   const tyreSets = tyresSnap.docs
-    .map((d) => ({ ...(d.data() as TyreSet), id: d.id }))
-    .sort((a, b) => b.storedAt.localeCompare(a.storedAt));
+    .map((d) => toPlainDoc<TyreSet & Record<string, unknown>>(d))
+    .sort((a, b) =>
+      String(b.storedAt ?? "").localeCompare(String(a.storedAt ?? ""))
+    );
 
   const staff = staffSnap.docs
-    .map((d) => ({ ...(d.data() as GarageStaff), id: d.id }))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .map((d) => toPlainDoc<GarageStaff & Record<string, unknown>>(d))
+    .sort((a, b) =>
+      String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+    );
 
   const reminders = remindersSnap.docs
-    .map((d) => ({ ...(d.data() as Reminder), id: d.id }))
+    .map((d) => toPlainDoc<Reminder & Record<string, unknown>>(d))
     .sort((a, b) =>
-      (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31")
+      String(a.dueDate ?? "9999-12-31").localeCompare(
+        String(b.dueDate ?? "9999-12-31")
+      )
     );
 
   return {
@@ -185,7 +198,7 @@ export async function getWorkOrderDetail(
     .get();
   if (!woSnap.exists) return null;
 
-  const workOrder = { ...(woSnap.data() as WorkOrder), id: woSnap.id };
+  const workOrder = toPlainDoc<WorkOrder & Record<string, unknown>>(woSnap);
   if (workOrder.garageId !== garageId) return null;
 
   const [itemsSnap, customerSnap, vehicleMatch] = await Promise.all([
@@ -200,13 +213,15 @@ export async function getWorkOrderDetail(
   ]);
 
   const items = itemsSnap.docs
-    .map((d) => ({ ...(d.data() as WorkOrderItem), id: d.id }))
+    .map((d) => toPlainDoc<WorkOrderItem & Record<string, unknown>>(d))
     .filter((i) => i.garageId === garageId)
-    .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+    .sort((a, b) =>
+      String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? ""))
+    );
 
   const customer =
     customerSnap && customerSnap.exists
-      ? ({ ...(customerSnap.data() as Customer), id: customerSnap.id } as Customer)
+      ? toPlainDoc<Customer & Record<string, unknown>>(customerSnap)
       : null;
 
   return {
@@ -235,7 +250,7 @@ export async function getCustomerDetail(
     .get();
   if (!custSnap.exists) return null;
 
-  const customer = { ...(custSnap.data() as Customer), id: custSnap.id };
+  const customer = toPlainDoc<Customer & Record<string, unknown>>(custSnap);
   if (customer.garageId !== garageId) return null;
 
   const normPlates = new Set(
@@ -254,20 +269,24 @@ export async function getCustomerDetail(
   ]);
 
   const workOrders = woSnap.docs
-    .map((d) => ({ ...(d.data() as WorkOrder), id: d.id }))
+    .map((d) => toPlainDoc<WorkOrder & Record<string, unknown>>(d))
     .filter(
       (wo) =>
         wo.customerId === customerId || normPlates.has(wo.plateNormalized)
     )
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .sort((a, b) =>
+      String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+    );
 
   const tyreSets = tyresSnap.docs
-    .map((d) => ({ ...(d.data() as TyreSet), id: d.id }))
+    .map((d) => toPlainDoc<TyreSet & Record<string, unknown>>(d))
     .filter(
       (ts) =>
         ts.customerId === customerId || normPlates.has(ts.plateNormalized)
     )
-    .sort((a, b) => b.storedAt.localeCompare(a.storedAt));
+    .sort((a, b) =>
+      String(b.storedAt ?? "").localeCompare(String(a.storedAt ?? ""))
+    );
 
   const vehicleMatches: Record<string, LinkedVehicleMatch | null> = {};
   await Promise.all(
@@ -299,7 +318,7 @@ export async function getPublicWorkOrderStatus(
     .get();
 
   if (!snap.exists) return null;
-  return snap.data() as WorkOrderPublicStatus;
+  return toPlainFirestoreData(snap.data() as WorkOrderPublicStatus);
 }
 
 /**
@@ -443,6 +462,8 @@ export async function getGarageWorkOrderItems(
     .where("garageId", "==", garageId)
     .get();
 
-  return snap.docs.map((d) => ({ ...(d.data() as WorkOrderItem), id: d.id }));
+  return snap.docs.map((d) =>
+    toPlainDoc<WorkOrderItem & Record<string, unknown>>(d)
+  );
 }
 

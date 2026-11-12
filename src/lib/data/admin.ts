@@ -3,6 +3,7 @@ import "server-only";
 import { getPublicPlatformCms } from "@/lib/data/platform-cms";
 import { getPlatformSettings } from "@/lib/data/platform-settings";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { toPlainDoc } from "@/lib/firebase/serialize";
 import type {
   Appointment,
   AppNotification,
@@ -76,41 +77,50 @@ export async function getAdminDashboardBundle(): Promise<AdminDashboardBundle> {
   ]);
 
   const users = usersSnap.docs
-    .map((d) => ({ ...(d.data() as UserProfile), uid: d.id }))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .map((d) => toPlainDoc<UserProfile & Record<string, unknown>>(d, "uid"))
+    .sort((a, b) =>
+      String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+    );
 
   const garages = garagesSnap.docs
-    .map((d) => ({ ...(d.data() as Garage), id: d.id }))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .map((d) => toPlainDoc<Garage & Record<string, unknown>>(d))
+    .sort((a, b) =>
+      String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+    );
 
-  const vehicles = vehiclesSnap.docs.map((d) => ({
-    ...(d.data() as Vehicle),
-    id: d.id,
-  }));
+  const vehicles = vehiclesSnap.docs.map((d) =>
+    toPlainDoc<Vehicle & Record<string, unknown>>(d)
+  );
 
-  const workOrders = workOrdersSnap.docs.map((d) => ({
-    ...(d.data() as WorkOrder),
-    id: d.id,
-  }));
+  const workOrders = workOrdersSnap.docs.map((d) =>
+    toPlainDoc<WorkOrder & Record<string, unknown>>(d)
+  );
 
-  const appointments = appointmentsSnap.docs.map((d) => ({
-    ...(d.data() as Appointment),
-    id: d.id,
-  }));
+  const appointments = appointmentsSnap.docs.map((d) =>
+    toPlainDoc<Appointment & Record<string, unknown>>(d)
+  );
 
-  const reminders = remindersSnap.docs.map((d) => ({
-    ...(d.data() as Reminder),
-    id: d.id,
-  }));
+  const reminders = remindersSnap.docs.map((d) =>
+    toPlainDoc<Reminder & Record<string, unknown>>(d)
+  );
 
-  const notifications = notificationsSnap.docs.map((d) => ({
-    ...(d.data() as AppNotification),
-    id: d.id,
-  }));
+  const notifications = notificationsSnap.docs.map((d) =>
+    toPlainDoc<AppNotification & Record<string, unknown>>(d)
+  );
 
   const auditLogs = auditLogsSnap.docs
-    .map((d) => ({ ...(d.data() as AuditLog), id: d.id }))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((d) => {
+      const plain = toPlainDoc<
+        AuditLog & Record<string, unknown> & { serverTimestamp?: unknown }
+      >(d);
+      // Omit raw serverTimestamp mirror field if createdAt is already present
+      const { serverTimestamp: _omit, ...rest } = plain;
+      void _omit;
+      return rest as AuditLog;
+    })
+    .sort((a, b) =>
+      String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+    )
     .slice(0, 300);
 
   return {

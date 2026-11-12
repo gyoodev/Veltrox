@@ -134,7 +134,7 @@ export function AuditLogsClient({ logs }: AuditLogsClientProps) {
                   </div>
                   <span className="font-mono text-xs text-muted-foreground">
                     {formatDateShort(log.createdAt, locale)}{" "}
-                    {log.createdAt.slice(11, 19)}
+                    {(log.createdAt ?? "").slice(11, 19)}
                   </span>
                 </div>
 

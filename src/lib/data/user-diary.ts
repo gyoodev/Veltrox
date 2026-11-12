@@ -5,6 +5,7 @@ import {
   type ExpenseAnalyticsSummary,
 } from "@/lib/diary-metrics";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { toPlainDoc } from "@/lib/firebase/serialize";
 import type {
   DiaryEntry,
   Garage,
@@ -48,18 +49,22 @@ export async function getUserDiaryBundle(
   ]);
 
   const vehicles = vehiclesSnap.docs
-    .map((d) => ({ ...(d.data() as Vehicle), id: d.id }))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .map((d) => toPlainDoc<Vehicle & Record<string, unknown>>(d))
+    .sort((a, b) =>
+      String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""))
+    );
 
   const diaryEntries = diarySnap.docs
-    .map((d) => ({ ...(d.data() as DiaryEntry), id: d.id }))
+    .map((d) => toPlainDoc<DiaryEntry & Record<string, unknown>>(d))
     .sort((a, b) => {
-      const byDate = b.date.localeCompare(a.date);
-      return byDate !== 0 ? byDate : b.createdAt.localeCompare(a.createdAt);
+      const byDate = String(b.date ?? "").localeCompare(String(a.date ?? ""));
+      return byDate !== 0
+        ? byDate
+        : String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? ""));
     });
 
   const reminders = remindersSnap.docs
-    .map((d) => ({ ...(d.data() as Reminder), id: d.id }))
+    .map((d) => toPlainDoc<Reminder & Record<string, unknown>>(d))
     .sort((a, b) => {
       if (a.status === "completed" && b.status !== "completed") return 1;
       if (a.status !== "completed" && b.status === "completed") return -1;
@@ -69,7 +74,7 @@ export async function getUserDiaryBundle(
     });
 
   const documents = docsSnap.docs
-    .map((d) => ({ ...(d.data() as VehicleDocument), id: d.id }))
+    .map((d) => toPlainDoc<VehicleDocument & Record<string, unknown>>(d))
     .sort((a, b) => {
       const expA = a.expiryDate ?? "9999-12-31";
       const expB = b.expiryDate ?? "9999-12-31";
@@ -97,8 +102,10 @@ export async function getApprovedGarages(): Promise<Garage[]> {
     .get();
 
   return snap.docs
-    .map((doc) => ({ ...(doc.data() as Garage), id: doc.id }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .map((doc) => toPlainDoc<Garage & Record<string, unknown>>(doc))
+    .sort((a, b) =>
+      String(a.name ?? "").localeCompare(String(b.name ?? ""))
+    );
 }
 
 export async function getApprovedGarageBySlug(
@@ -114,7 +121,7 @@ export async function getApprovedGarageBySlug(
     .get();
 
   const match = snap.docs
-    .map((doc) => ({ ...(doc.data() as Garage), id: doc.id }))
+    .map((doc) => toPlainDoc<Garage & Record<string, unknown>>(doc))
     .find((g) => g.status === "approved");
 
   return match ?? null;
