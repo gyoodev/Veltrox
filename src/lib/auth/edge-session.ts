@@ -44,7 +44,9 @@ function fromBase64Url(base64Url: string): Uint8Array | null {
       .replace(/_/g, "/")
       .padEnd(Math.ceil(base64Url.length / 4) * 4, "=");
     const binary = atob(padded);
-    const out = new Uint8Array(binary.length);
+    // Match TextEncoder's realm so SubtleCrypto in Node/Edge VM accepts the backing ArrayBuffer.
+    const HostUint8Array = new TextEncoder().encode("").constructor as typeof Uint8Array;
+    const out = new HostUint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
       out[i] = binary.charCodeAt(i);
     }
@@ -108,20 +110,25 @@ export async function verifyEdgeSession(
   const payloadBytes = fromBase64Url(encodedPayload);
   if (!sigBytes || !payloadBytes) return null;
 
-  const key = await importHmacKey();
-  const dataBytes = new TextEncoder().encode(encodedPayload);
-  const isValid = await crypto.subtle.verify(
-    "HMAC",
-    key,
-    sigBytes.buffer.slice(
-      sigBytes.byteOffset,
-      sigBytes.byteOffset + sigBytes.byteLength
-    ) as ArrayBuffer,
-    dataBytes.buffer.slice(
-      dataBytes.byteOffset,
-      dataBytes.byteOffset + dataBytes.byteLength
-    ) as ArrayBuffer
-  );
+  let isValid = false;
+  try {
+    const key = await importHmacKey();
+    const dataBytes = new TextEncoder().encode(encodedPayload);
+    isValid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      sigBytes.buffer.slice(
+        sigBytes.byteOffset,
+        sigBytes.byteOffset + sigBytes.byteLength
+      ) as ArrayBuffer,
+      dataBytes.buffer.slice(
+        dataBytes.byteOffset,
+        dataBytes.byteOffset + dataBytes.byteLength
+      ) as ArrayBuffer
+    );
+  } catch {
+    return null;
+  }
 
   if (!isValid) return null;
 
