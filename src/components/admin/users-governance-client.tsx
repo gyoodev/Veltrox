@@ -17,18 +17,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDateShort } from "@/lib/utils";
-import type { AppLocale, Garage, UserProfile, UserRole } from "@/types/domain";
+import type {
+  AppLocale,
+  Garage,
+  PlatformSettingsConfig,
+  UserProfile,
+  UserRole,
+} from "@/types/domain";
 
 interface UsersGovernanceClientProps {
   currentAdminUid: string;
   initialUsers: UserProfile[];
   garages: Garage[];
+  settings?: PlatformSettingsConfig;
 }
 
 export function UsersGovernanceClient({
   currentAdminUid,
   initialUsers,
   garages: initialGarages,
+  settings,
 }: UsersGovernanceClientProps) {
   const t = useTranslations("adminPanel.users");
   const locale = useLocale() as AppLocale;
@@ -65,6 +73,7 @@ export function UsersGovernanceClient({
       suspended?: boolean;
       role?: UserRole;
       garagePlan?: "free" | "pro";
+      userPlan?: "free" | "pro";
     }
   ) => {
     setBusyUid(uid);
@@ -85,6 +94,7 @@ export function UsersGovernanceClient({
         garageStatus: UserProfile["garageStatus"];
         suspended: boolean;
         garagePlan?: "free" | "pro";
+        userPlan?: "free" | "pro";
       };
 
       setUsers((prev) =>
@@ -95,6 +105,7 @@ export function UsersGovernanceClient({
                 role: data.role,
                 garageStatus: data.garageStatus,
                 suspended: data.suspended,
+                plan: data.userPlan ?? u.plan,
               }
             : u
         )
@@ -215,6 +226,16 @@ export function UsersGovernanceClient({
                           {linkedGarage.name} •{" "}
                           {linkedGarage.plan.toUpperCase()}
                         </Badge>
+                      ) : user.role === "USER" ? (
+                        <Badge
+                          variant={
+                            (user.plan ?? "free") === "pro"
+                              ? "violet"
+                              : "outline"
+                          }
+                        >
+                          DRIVER {(user.plan ?? "free").toUpperCase()}
+                        </Badge>
                       ) : null}
                     </div>
                     <p className="font-mono text-xs text-muted-foreground">
@@ -242,6 +263,30 @@ export function UsersGovernanceClient({
                           <SelectContent>
                             <SelectItem value="free">Free (50/mo)</SelectItem>
                             <SelectItem value="pro">Pro (500/mo)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : user.role === "USER" ? (
+                      <div className="w-40">
+                        <Select
+                          value={user.plan ?? "free"}
+                          disabled={isBusy}
+                          onValueChange={(plan) =>
+                            void patchUser(user.uid, {
+                              userPlan: plan as "free" | "pro",
+                            })
+                          }
+                        >
+                          <SelectTrigger aria-label={t("userPlanLabel")}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="free">
+                              Free (€0)
+                            </SelectItem>
+                            <SelectItem value="pro">
+                              Pro (€{(settings?.userProPlanPriceEur ?? 4.9).toFixed(2)})
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

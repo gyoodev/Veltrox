@@ -4,15 +4,26 @@ import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { toPlainFirestoreData } from "@/lib/firebase/serialize";
 import type { PlatformSettingsConfig } from "@/types/domain";
 
+function normalizePlanPrice(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return fallback;
+  }
+  return Math.round(value * 100) / 100;
+}
+
 export function getDefaultPlatformSettings(): PlatformSettingsConfig {
   return {
     maintenanceMode: false,
-    maintenanceMessage: "Платформата е във временна профилактика. Моля, опитайте отново след няколко минути.",
+    maintenanceMessage:
+      "Платформата е във временна профилактика. Моля, опитайте отново след няколко минути.",
     allowRegistrations: true,
     allowGarageApplications: true,
     complianceChecksEnabled: true,
     defaultCurrency: "EUR",
+    garageSubscriptionsEnabled: true,
     proPlanPriceEur: 49,
+    userSubscriptionsEnabled: true,
+    userProPlanPriceEur: 4.9,
     systemNotice: "",
     updatedAt: new Date(0).toISOString(),
     updatedByUid: null,
@@ -49,10 +60,22 @@ export async function getPlatformSettings(): Promise<PlatformSettingsConfig> {
       complianceChecksEnabled:
         data.complianceChecksEnabled ?? defaults.complianceChecksEnabled,
       defaultCurrency: data.defaultCurrency === "BGN" ? "BGN" : "EUR",
-      proPlanPriceEur:
-        typeof data.proPlanPriceEur === "number" && data.proPlanPriceEur > 0
-          ? data.proPlanPriceEur
-          : defaults.proPlanPriceEur,
+      garageSubscriptionsEnabled:
+        typeof data.garageSubscriptionsEnabled === "boolean"
+          ? data.garageSubscriptionsEnabled
+          : defaults.garageSubscriptionsEnabled,
+      proPlanPriceEur: normalizePlanPrice(
+        data.proPlanPriceEur,
+        defaults.proPlanPriceEur
+      ),
+      userSubscriptionsEnabled:
+        typeof data.userSubscriptionsEnabled === "boolean"
+          ? data.userSubscriptionsEnabled
+          : defaults.userSubscriptionsEnabled,
+      userProPlanPriceEur: normalizePlanPrice(
+        data.userProPlanPriceEur,
+        defaults.userProPlanPriceEur
+      ),
       systemNotice: data.systemNotice ?? defaults.systemNotice,
       updatedAt: data.updatedAt ?? defaults.updatedAt,
       updatedByUid: data.updatedByUid ?? null,
@@ -76,6 +99,25 @@ export async function updatePlatformSettings(
   const next: PlatformSettingsConfig = {
     ...current,
     ...updates,
+    proPlanPriceEur:
+      updates.proPlanPriceEur !== undefined
+        ? normalizePlanPrice(updates.proPlanPriceEur, current.proPlanPriceEur)
+        : current.proPlanPriceEur,
+    userProPlanPriceEur:
+      updates.userProPlanPriceEur !== undefined
+        ? normalizePlanPrice(
+            updates.userProPlanPriceEur,
+            current.userProPlanPriceEur
+          )
+        : current.userProPlanPriceEur,
+    garageSubscriptionsEnabled:
+      typeof updates.garageSubscriptionsEnabled === "boolean"
+        ? updates.garageSubscriptionsEnabled
+        : current.garageSubscriptionsEnabled,
+    userSubscriptionsEnabled:
+      typeof updates.userSubscriptionsEnabled === "boolean"
+        ? updates.userSubscriptionsEnabled
+        : current.userSubscriptionsEnabled,
     updatedAt: new Date().toISOString(),
     updatedByUid: actorUid,
   };
@@ -97,7 +139,10 @@ export async function updatePlatformSettings(
       allowGarageApplications: next.allowGarageApplications,
       complianceChecksEnabled: next.complianceChecksEnabled,
       defaultCurrency: next.defaultCurrency,
+      garageSubscriptionsEnabled: next.garageSubscriptionsEnabled,
       proPlanPriceEur: next.proPlanPriceEur,
+      userSubscriptionsEnabled: next.userSubscriptionsEnabled,
+      userProPlanPriceEur: next.userProPlanPriceEur,
     },
     createdAt: new Date().toISOString(),
   });

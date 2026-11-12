@@ -77,7 +77,23 @@ export function AdminOverviewClient({ bundle }: AdminOverviewClientProps) {
     [bundle.garages]
   );
 
-  const mrrEur = proGaragesCount * (bundle.settings?.proPlanPriceEur ?? 49);
+  const proUsersCount = useMemo(
+    () =>
+      bundle.users.filter(
+        (u: UserProfile) => u.role === "USER" && u.plan === "pro"
+      ).length,
+    [bundle.users]
+  );
+
+  const garageMrrEur =
+    bundle.settings?.garageSubscriptionsEnabled !== false
+      ? proGaragesCount * (bundle.settings?.proPlanPriceEur ?? 49)
+      : 0;
+  const userMrrEur =
+    bundle.settings?.userSubscriptionsEnabled !== false
+      ? proUsersCount * (bundle.settings?.userProPlanPriceEur ?? 4.9)
+      : 0;
+  const mrrEur = Number((garageMrrEur + userMrrEur).toFixed(2));
 
   // Quick 1-click decision directly from dashboard
   const handleDecision = async (userId: string, decision: "approved" | "rejected") => {
@@ -330,7 +346,7 @@ export function AdminOverviewClient({ bundle }: AdminOverviewClientProps) {
             {formatCurrency(mrrEur, locale, "EUR")}
           </p>
           <p className="mt-1 text-[11px] text-muted-foreground truncate">
-            {proGaragesCount} Pro сервиза
+            {proGaragesCount} Pro сервиза • {proUsersCount} Pro шофьора
           </p>
         </Card>
       </div>

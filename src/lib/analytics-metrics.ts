@@ -13,7 +13,8 @@ import {
 } from "@/types/domain";
 
 const BGN_TO_EUR_RATE = 1.95583;
-const GARAGE_PRO_MONTHLY_EUR = 39;
+const DEFAULT_GARAGE_PRO_MONTHLY_EUR = 49;
+const DEFAULT_USER_PRO_MONTHLY_EUR = 4.9;
 const MS_PER_DAY = 86_400_000;
 
 export function toAmountEur(
@@ -417,6 +418,8 @@ export interface AdminPlatformAnalyticsSummary {
   rejectedGaragesCount: number;
   freeGaragesCount: number;
   proGaragesCount: number;
+  freeUsersCount: number;
+  proUsersCount: number;
   mrrEur: number;
   arrEur: number;
   totalVehicles: number;
@@ -437,6 +440,10 @@ export function computeAdminPlatformAnalytics(params: {
   workOrders: ReadonlyArray<WorkOrder>;
   reminders: ReadonlyArray<Reminder>;
   notifications: ReadonlyArray<AppNotification>;
+  proPlanPriceEur?: number;
+  userProPlanPriceEur?: number;
+  garageSubscriptionsEnabled?: boolean;
+  userSubscriptionsEnabled?: boolean;
   now?: Date;
 }): AdminPlatformAnalyticsSummary {
   const now = params.now ?? new Date();
@@ -450,10 +457,15 @@ export function computeAdminPlatformAnalytics(params: {
   let garageOwnersCount = 0;
   let adminsCount = 0;
   let suspendedUsersCount = 0;
+  let freeUsersCount = 0;
+  let proUsersCount = 0;
 
   for (const u of params.users) {
-    if (u.role === "USER") carOwnersCount += 1;
-    else if (u.role === "GARAGE_OWNER") garageOwnersCount += 1;
+    if (u.role === "USER") {
+      carOwnersCount += 1;
+      if (u.plan === "pro") proUsersCount += 1;
+      else freeUsersCount += 1;
+    } else if (u.role === "GARAGE_OWNER") garageOwnersCount += 1;
     else if (u.role === "ADMIN") adminsCount += 1;
 
     if (u.suspended) suspendedUsersCount += 1;
@@ -519,7 +531,27 @@ export function computeAdminPlatformAnalytics(params: {
     else notificationsSentCount += 1;
   }
 
-  const mrrEur = proGaragesCount * GARAGE_PRO_MONTHLY_EUR;
+  const garagePriceEur =
+    typeof params.proPlanPriceEur === "number" &&
+    Number.isFinite(params.proPlanPriceEur) &&
+    params.proPlanPriceEur >= 0
+      ? params.proPlanPriceEur
+      : DEFAULT_GARAGE_PRO_MONTHLY_EUR;
+  const userPriceEur =
+    typeof params.userProPlanPriceEur === "number" &&
+    Number.isFinite(params.userProPlanPriceEur) &&
+    params.userProPlanPriceEur >= 0
+      ? params.userProPlanPriceEur
+      : DEFAULT_USER_PRO_MONTHLY_EUR;
+  const garageMrrEur =
+    params.garageSubscriptionsEnabled !== false
+      ? proGaragesCount * garagePriceEur
+      : 0;
+  const userMrrEur =
+    params.userSubscriptionsEnabled !== false
+      ? proUsersCount * userPriceEur
+      : 0;
+  const mrrEur = Number((garageMrrEur + userMrrEur).toFixed(2));
 
   return {
     totalUsers: params.users.length,
@@ -533,8 +565,10 @@ export function computeAdminPlatformAnalytics(params: {
     rejectedGaragesCount,
     freeGaragesCount,
     proGaragesCount,
+    freeUsersCount,
+    proUsersCount,
     mrrEur,
-    arrEur: mrrEur * 12,
+    arrEur: Number((mrrEur * 12).toFixed(2)),
     totalVehicles: params.vehicles.length,
     totalWorkOrders: params.workOrders.length,
     totalVolumeEur: Number(totalVolumeEur.toFixed(2)),

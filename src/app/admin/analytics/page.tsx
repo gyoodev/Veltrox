@@ -14,6 +14,10 @@ export default async function AdminAnalyticsPage() {
     workOrders: bundle.workOrders,
     reminders: bundle.reminders,
     notifications: bundle.notifications,
+    proPlanPriceEur: bundle.settings.proPlanPriceEur,
+    userProPlanPriceEur: bundle.settings.userProPlanPriceEur,
+    garageSubscriptionsEnabled: bundle.settings.garageSubscriptionsEnabled,
+    userSubscriptionsEnabled: bundle.settings.userSubscriptionsEnabled,
   });
 
   return <AdminAnalyticsClient summary={summary} />;

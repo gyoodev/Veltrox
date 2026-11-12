@@ -217,8 +217,47 @@ export function BentoFeaturesSection() {
   );
 }
 
-export function PricingSection() {
+const BGN_PER_EUR = 1.95583;
+
+function formatPlanPriceLabel(
+  eurAmount: number,
+  currency: "EUR" | "BGN" = "EUR"
+): string {
+  const safeEur = Number.isFinite(eurAmount) && eurAmount >= 0 ? eurAmount : 0;
+  if (currency === "BGN") {
+    const bgn = safeEur * BGN_PER_EUR;
+    return bgn === 0
+      ? "0 лв."
+      : Number.isInteger(bgn)
+        ? `${bgn} лв.`
+        : `${bgn.toFixed(2)} лв.`;
+  }
+  return safeEur === 0
+    ? "€0"
+    : Number.isInteger(safeEur)
+      ? `€${safeEur}`
+      : `€${safeEur.toFixed(2)}`;
+}
+
+interface PricingSectionProps {
+  currency?: "EUR" | "BGN";
+  userProPriceEur?: number;
+  garageProPriceEur?: number;
+  userSubscriptionsEnabled?: boolean;
+  garageSubscriptionsEnabled?: boolean;
+}
+
+export function PricingSection({
+  currency = "EUR",
+  userProPriceEur = 4.9,
+  garageProPriceEur = 49,
+  userSubscriptionsEnabled = true,
+  garageSubscriptionsEnabled = true,
+}: PricingSectionProps = {}) {
   const t = useTranslations("pricing");
+  const freePriceLabel = formatPlanPriceLabel(0, currency);
+  const ownerProPriceLabel = formatPlanPriceLabel(userProPriceEur, currency);
+  const garageProPriceLabel = formatPlanPriceLabel(garageProPriceEur, currency);
 
   return (
     <section
@@ -247,7 +286,13 @@ export function PricingSection() {
           </div>
 
           <TabsContent value="owners" className="mt-8">
-            <div className="grid gap-6 md:grid-cols-2">
+            <div
+              className={
+                userSubscriptionsEnabled
+                  ? "grid gap-6 md:grid-cols-2"
+                  : "mx-auto max-w-md"
+              }
+            >
               {/* Driver Free */}
               <Card className="flex flex-col justify-between p-7">
                 <div>
@@ -259,7 +304,7 @@ export function PricingSection() {
                   </div>
                   <div className="mt-4 flex items-baseline gap-1">
                     <span className="font-mono text-4xl font-extrabold text-foreground">
-                      {t("ownerFreePrice")}
+                      {freePriceLabel}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       {t("perMonth")}
@@ -293,56 +338,64 @@ export function PricingSection() {
               </Card>
 
               {/* Driver Pro */}
-              <Card className="relative flex flex-col justify-between border-primary/45 p-7 shadow-glow-blue">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-foreground">
-                      {t("ownerProName")}
-                    </h3>
-                    <Badge variant="violet">{t("recommended")}</Badge>
+              {userSubscriptionsEnabled ? (
+                <Card className="relative flex flex-col justify-between border-primary/45 p-7 shadow-glow-blue">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-foreground">
+                        {t("ownerProName")}
+                      </h3>
+                      <Badge variant="violet">{t("recommended")}</Badge>
+                    </div>
+                    <div className="mt-4 flex items-baseline gap-1">
+                      <span className="font-mono text-4xl font-extrabold text-foreground">
+                        {ownerProPriceLabel}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {t("perMonth")}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      {t("ownerProDesc")}
+                    </p>
+                    <ul className="mt-6 space-y-3 text-sm text-foreground">
+                      {[
+                        t("ownerProF1"),
+                        t("ownerProF2"),
+                        t("ownerProF3"),
+                        t("ownerProF4"),
+                      ].map((feat) => (
+                        <li key={feat} className="flex items-start gap-2.5">
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <div className="mt-4 flex items-baseline gap-1">
-                    <span className="font-mono text-4xl font-extrabold text-foreground">
-                      {t("ownerProPrice")}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {t("perMonth")}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    {t("ownerProDesc")}
-                  </p>
-                  <ul className="mt-6 space-y-3 text-sm text-foreground">
-                    {[
-                      t("ownerProF1"),
-                      t("ownerProF2"),
-                      t("ownerProF3"),
-                      t("ownerProF4"),
-                    ].map((feat) => (
-                      <li key={feat} className="flex items-start gap-2.5">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <Button
-                  asChild
-                  variant="gradient"
-                  size="lg"
-                  className="mt-8 w-full"
-                >
-                  <Link href="/register?role=USER">
-                    {t("ctaOwner")}
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </Card>
+                  <Button
+                    asChild
+                    variant="gradient"
+                    size="lg"
+                    className="mt-8 w-full"
+                  >
+                    <Link href="/register?role=USER">
+                      {t("ctaOwner")}
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </Card>
+              ) : null}
             </div>
           </TabsContent>
 
           <TabsContent value="garages" className="mt-8">
-            <div className="grid gap-6 md:grid-cols-2">
+            <div
+              className={
+                garageSubscriptionsEnabled
+                  ? "grid gap-6 md:grid-cols-2"
+                  : "mx-auto max-w-md"
+              }
+            >
               {/* Garage Free */}
               <Card className="flex flex-col justify-between p-7">
                 <div>
@@ -354,7 +407,7 @@ export function PricingSection() {
                   </div>
                   <div className="mt-4 flex items-baseline gap-1">
                     <span className="font-mono text-4xl font-extrabold text-foreground">
-                      {t("garageFreePrice")}
+                      {freePriceLabel}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       {t("perMonth")}
@@ -390,51 +443,53 @@ export function PricingSection() {
               </Card>
 
               {/* Garage Pro */}
-              <Card className="relative flex flex-col justify-between border-primary/45 p-7 shadow-glow-blue">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-foreground">
-                      {t("garageProName")}
-                    </h3>
-                    <Badge variant="violet">{t("recommended")}</Badge>
+              {garageSubscriptionsEnabled ? (
+                <Card className="relative flex flex-col justify-between border-primary/45 p-7 shadow-glow-blue">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-foreground">
+                        {t("garageProName")}
+                      </h3>
+                      <Badge variant="violet">{t("recommended")}</Badge>
+                    </div>
+                    <div className="mt-4 flex items-baseline gap-1">
+                      <span className="font-mono text-4xl font-extrabold text-foreground">
+                        {garageProPriceLabel}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {t("perMonth")}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      {t("garageProDesc")}
+                    </p>
+                    <ul className="mt-6 space-y-3 text-sm text-foreground">
+                      {[
+                        t("garageProF1"),
+                        t("garageProF2"),
+                        t("garageProF3"),
+                        t("garageProF4"),
+                      ].map((feat) => (
+                        <li key={feat} className="flex items-start gap-2.5">
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <div className="mt-4 flex items-baseline gap-1">
-                    <span className="font-mono text-4xl font-extrabold text-foreground">
-                      {t("garageProPrice")}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {t("perMonth")}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    {t("garageProDesc")}
-                  </p>
-                  <ul className="mt-6 space-y-3 text-sm text-foreground">
-                    {[
-                      t("garageProF1"),
-                      t("garageProF2"),
-                      t("garageProF3"),
-                      t("garageProF4"),
-                    ].map((feat) => (
-                      <li key={feat} className="flex items-start gap-2.5">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <Button
-                  asChild
-                  variant="gradient"
-                  size="lg"
-                  className="mt-8 w-full"
-                >
-                  <Link href="/register?role=GARAGE_OWNER">
-                    {t("ctaGarage")}
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </Card>
+                  <Button
+                    asChild
+                    variant="gradient"
+                    size="lg"
+                    className="mt-8 w-full"
+                  >
+                    <Link href="/register?role=GARAGE_OWNER">
+                      {t("ctaGarage")}
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </Card>
+              ) : null}
             </div>
           </TabsContent>
         </Tabs>

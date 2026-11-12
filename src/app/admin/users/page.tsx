@@ -11,6 +11,7 @@ export default async function AdminUsersGovernancePage() {
       currentAdminUid={session.uid}
       initialUsers={bundle.users}
       garages={bundle.garages}
+      settings={bundle.settings}
     />
   );
 }

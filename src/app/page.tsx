@@ -16,6 +16,7 @@ import { AnimatedCtaButton } from "@/components/ui/animated-cta-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getPublicPlatformCms } from "@/lib/data/platform-cms";
+import { getPlatformSettings } from "@/lib/data/platform-settings";
 import type { AppLocale } from "@/types/domain";
 
 export default async function LandingPage() {
@@ -24,7 +25,10 @@ export default async function LandingPage() {
   const tFaq = await getTranslations("faq");
   const tShell = await getTranslations("shell");
   const locale = (await getLocale()) as AppLocale;
-  const cms = await getPublicPlatformCms();
+  const [cms, platformSettings] = await Promise.all([
+    getPublicPlatformCms(),
+    getPlatformSettings(),
+  ]);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   const faqEntities =
@@ -141,7 +145,13 @@ export default async function LandingPage() {
 
         <TrustSection />
         <BentoFeaturesSection />
-        <PricingSection />
+        <PricingSection
+          currency={platformSettings.defaultCurrency}
+          userProPriceEur={platformSettings.userProPlanPriceEur}
+          garageProPriceEur={platformSettings.proPlanPriceEur}
+          userSubscriptionsEnabled={platformSettings.userSubscriptionsEnabled}
+          garageSubscriptionsEnabled={platformSettings.garageSubscriptionsEnabled}
+        />
         <FaqSection cmsFaqs={cms.faqs} />
         <BottomCtaSection />
       </main>

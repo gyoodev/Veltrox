@@ -1235,6 +1235,7 @@
       "emptyDesc": "Променете търсенето или филтъра по роля.",
       "suspendedBadge": "Блокиран",
       "planLabel": "Абонаментен план на сервиза",
+      "userPlanLabel": "Абонаментен план на потребителя",
       "roleSelectAria": "Роля на акаунта",
       "unsuspendBtn": "Възстанови",
       "suspendBtn": "Блокирай",

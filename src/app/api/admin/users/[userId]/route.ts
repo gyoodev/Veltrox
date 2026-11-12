@@ -180,6 +180,28 @@ export async function PATCH(
     }
   }
 
+  if (updates.userPlan) {
+    const previousPlan = targetUser.plan ?? "free";
+    firestorePatch.plan = updates.userPlan;
+
+    if (updates.userPlan !== previousPlan) {
+      await admin.adminDb.collection("auditLogs").add({
+        action: "USER_PLAN_UPDATED",
+        actorUid: auth.session.uid,
+        actorRole: "ADMIN",
+        targetUid: userId,
+        targetGarageId: null,
+        metadata: {
+          previousPlan,
+          newPlan: updates.userPlan,
+          email: targetUser.email,
+        },
+        createdAt: nowIso,
+        serverTimestamp: FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
   await userRef.update(firestorePatch);
 
   return NextResponse.json({
@@ -189,6 +211,7 @@ export async function PATCH(
     garageStatus: nextGarageStatus,
     suspended: nextSuspended,
     garagePlan: updates.garagePlan,
+    userPlan: updates.userPlan ?? targetUser.plan ?? "free",
   });
 }
 

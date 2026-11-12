@@ -2,6 +2,8 @@
 
 import {
   AlertTriangle,
+  ArrowUpRight,
+  Building2,
   CheckCircle2,
   Database,
   Download,
@@ -12,7 +14,9 @@ import {
   ShieldAlert,
   Sliders,
   Sparkles,
+  Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -41,10 +45,26 @@ interface PlatformSettingsClientProps {
   initialSettings: PlatformSettingsConfig;
 }
 
+const BGN_PER_EUR = 1.95583;
+
+function parsePriceInput(raw: string, fallback: number): number {
+  const normalized = raw.trim().replace(",", ".");
+  if (!normalized) return 0;
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.round(parsed * 100) / 100;
+}
+
 export function PlatformSettingsClient({
   initialSettings,
 }: PlatformSettingsClientProps) {
   const [settings, setSettings] = useState<PlatformSettingsConfig>(initialSettings);
+  const [proPriceDraft, setProPriceDraft] = useState<string>(
+    String(initialSettings.proPlanPriceEur)
+  );
+  const [userProPriceDraft, setUserProPriceDraft] = useState<string>(
+    String(initialSettings.userProPlanPriceEur)
+  );
   const [saving, setSaving] = useState(false);
   const [testingApis, setTestingApis] = useState(false);
   const [apiStatuses, setApiStatuses] = useState<{
@@ -54,12 +74,23 @@ export function PlatformSettingsClient({
   } | null>(null);
 
   const handleSave = async () => {
+    const nextProPrice = parsePriceInput(proPriceDraft, settings.proPlanPriceEur);
+    const nextUserProPrice = parsePriceInput(
+      userProPriceDraft,
+      settings.userProPlanPriceEur
+    );
+    const payload: PlatformSettingsConfig = {
+      ...settings,
+      proPlanPriceEur: nextProPrice,
+      userProPlanPriceEur: nextUserProPrice,
+    };
+
     setSaving(true);
     try {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -67,8 +98,10 @@ export function PlatformSettingsClient({
         return;
       }
 
-      const json = await res.json();
+      const json = (await res.json()) as { settings: PlatformSettingsConfig };
       setSettings(json.settings);
+      setProPriceDraft(String(json.settings.proPlanPriceEur));
+      setUserProPriceDraft(String(json.settings.userProPlanPriceEur));
       toast.success("Системните настройки са обновени успешно в Firestore!");
     } catch {
       toast.error("Възникна грешка при запазване на настройките");
@@ -294,54 +327,238 @@ export function PlatformSettingsClient({
             </CardContent>
           </Card>
 
-          {/* Pricing & Business Parameters */}
+          {/* Pricing & Subscriptions Management (Business & Users) */}
           <Card className="border-border/70 bg-card/60">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-emerald-400" />
-                Бизнес параметри и абонаменти
+                Бизнес и потребителски абонаменти
               </CardTitle>
               <CardDescription>
-                Конфигурация на базовата валута и ценовите планове за автосервизи.
+                Конфигурация на базовата валута, ценовите планове и абонаментите за автосервизи и потребители.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Основна валута на платформата</Label>
-                <Select
-                  value={settings.defaultCurrency}
-                  onValueChange={(v) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      defaultCurrency: v as "BGN" | "EUR",
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="EUR">EUR (€) - Европейска валута</SelectItem>
-                    <SelectItem value="BGN">BGN (лв) - Български лев</SelectItem>
-                  </SelectContent>
-                </Select>
+            <CardContent className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+                <div className="space-y-2">
+                  <Label>Основна валута на платформата</Label>
+                  <Select
+                    value={settings.defaultCurrency}
+                    onValueChange={(v) =>
+                      setSettings((prev) => ({
+                        ...prev,
+                        defaultCurrency: v as "BGN" | "EUR",
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EUR">EUR (€) - Европейска валута</SelectItem>
+                      <SelectItem value="BGN">BGN (лв) - Български лев</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="rounded-xl border border-border/60 bg-secondary/25 px-3.5 py-2.5 text-xs text-muted-foreground">
+                  {settings.defaultCurrency === "BGN"
+                    ? "Цените на началната страница се конвертират автоматично в лева (1 EUR = 1.95583 BGN)."
+                    : "Цените се съхраняват и показват директно в евро (€)."}
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="pro-price">Месечна такса за Veltrox Pro (€)</Label>
-                <Input
-                  id="pro-price"
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={settings.proPlanPriceEur}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      proPlanPriceEur: Number(e.target.value) || 0,
-                    }))
-                  }
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Business / Garage Subscription Management */}
+                <div className="rounded-xl border border-border/60 bg-secondary/25 p-4 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-semibold text-foreground">
+                          Бизнес абонамент (Сервизи)
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Абонаментни планове и Pro достъп за автосервизи.
+                      </p>
+                    </div>
+                    <Switch
+                      aria-label="Активни бизнес абонаменти"
+                      checked={settings.garageSubscriptionsEnabled}
+                      onCheckedChange={(checked) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          garageSubscriptionsEnabled: checked,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="pro-price">
+                      Месечна такса за Garage Pro (€)
+                    </Label>
+                    <Input
+                      id="pro-price"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={proPriceDraft}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setProPriceDraft(raw);
+                        if (raw.trim() !== "") {
+                          const parsed = Number.parseFloat(raw.replace(",", "."));
+                          if (Number.isFinite(parsed) && parsed >= 0) {
+                            setSettings((prev) => ({
+                              ...prev,
+                              proPlanPriceEur: Math.round(parsed * 100) / 100,
+                            }));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        const parsed = parsePriceInput(
+                          proPriceDraft,
+                          settings.proPlanPriceEur
+                        );
+                        setSettings((prev) => ({ ...prev, proPlanPriceEur: parsed }));
+                        setProPriceDraft(String(parsed));
+                      }}
+                    />
+                    <p className="font-mono text-[11px] text-muted-foreground">
+                      Free: €0 • Pro: €{settings.proPlanPriceEur.toFixed(2)}
+                      {settings.defaultCurrency === "BGN"
+                        ? ` (≈ ${(settings.proPlanPriceEur * BGN_PER_EUR).toFixed(2)} лв.)`
+                        : ""}
+                    </p>
+                  </div>
+
+                  <div className="pt-1 border-t border-border/50 flex items-center justify-between text-xs">
+                    <Badge
+                      variant={
+                        settings.garageSubscriptionsEnabled ? "success" : "secondary"
+                      }
+                      className="text-[10px]"
+                    >
+                      {settings.garageSubscriptionsEnabled ? "АКТИВЕН" : "СПРЯН"}
+                    </Badge>
+                    <Link
+                      href="/admin/garages"
+                      className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                    >
+                      Сервизни планове
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
+
+                {/* User / Driver Subscription Management */}
+                <div className="rounded-xl border border-border/60 bg-secondary/25 p-4 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-violet-400" />
+                        <span className="text-sm font-semibold text-foreground">
+                          Потребителски абонамент (Шофьори)
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Абонаментни планове и Driver Pro за собственици на автомобили.
+                      </p>
+                    </div>
+                    <Switch
+                      aria-label="Активни потребителски абонаменти"
+                      checked={settings.userSubscriptionsEnabled}
+                      onCheckedChange={(checked) =>
+                        setSettings((prev) => ({
+                          ...prev,
+                          userSubscriptionsEnabled: checked,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="user-pro-price">
+                      Месечна такса за Driver Pro (€)
+                    </Label>
+                    <Input
+                      id="user-pro-price"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={userProPriceDraft}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setUserProPriceDraft(raw);
+                        if (raw.trim() !== "") {
+                          const parsed = Number.parseFloat(raw.replace(",", "."));
+                          if (Number.isFinite(parsed) && parsed >= 0) {
+                            setSettings((prev) => ({
+                              ...prev,
+                              userProPlanPriceEur: Math.round(parsed * 100) / 100,
+                            }));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        const parsed = parsePriceInput(
+                          userProPriceDraft,
+                          settings.userProPlanPriceEur
+                        );
+                        setSettings((prev) => ({
+                          ...prev,
+                          userProPlanPriceEur: parsed,
+                        }));
+                        setUserProPriceDraft(String(parsed));
+                      }}
+                    />
+                    <p className="font-mono text-[11px] text-muted-foreground">
+                      Free: €0 • Pro: €{settings.userProPlanPriceEur.toFixed(2)}
+                      {settings.defaultCurrency === "BGN"
+                        ? ` (≈ ${(settings.userProPlanPriceEur * BGN_PER_EUR).toFixed(2)} лв.)`
+                        : ""}
+                    </p>
+                  </div>
+
+                  <div className="pt-1 border-t border-border/50 flex items-center justify-between text-xs">
+                    <Badge
+                      variant={
+                        settings.userSubscriptionsEnabled ? "violet" : "secondary"
+                      }
+                      className="text-[10px]"
+                    >
+                      {settings.userSubscriptionsEnabled ? "АКТИВЕН" : "СПРЯН"}
+                    </Badge>
+                    <Link
+                      href="/admin/users"
+                      className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                    >
+                      Потребителски планове
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="button"
+                  variant="gradient"
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="gap-2"
+                >
+                  {saving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                  <span>{saving ? "Запазване..." : "Запази абонаментните настройки"}</span>
+                </Button>
               </div>
             </CardContent>
           </Card>

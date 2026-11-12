@@ -54,6 +54,8 @@ export interface UserProfile {
   /** True when this account is a limited-permission staff member under `garageId` */
   isStaff?: boolean;
   staffRole?: StaffRole | null;
+  /** Personal driver subscription tier (mirrors garage plan semantics; defaults to "free") */
+  plan?: "free" | "pro";
   language: AppLocale;
   notificationPreferences: NotificationPreferences;
   suspended: boolean;
@@ -499,7 +501,10 @@ export interface PlatformSettingsConfig {
   allowGarageApplications: boolean;
   complianceChecksEnabled: boolean;
   defaultCurrency: "BGN" | "EUR";
+  garageSubscriptionsEnabled: boolean;
   proPlanPriceEur: number;
+  userSubscriptionsEnabled: boolean;
+  userProPlanPriceEur: number;
   systemNotice: string;
   updatedAt: string;
   updatedByUid: string | null;
@@ -513,6 +518,7 @@ export const AUDIT_LOG_ACTIONS = [
   "GARAGE_APPROVED",
   "GARAGE_REJECTED",
   "GARAGE_PLAN_UPDATED",
+  "USER_PLAN_UPDATED",
   "GARAGE_STAFF_ADDED",
   "GARAGE_STAFF_REMOVED",
   "USER_SUSPENDED",

@@ -1235,6 +1235,7 @@
       "emptyDesc": "Try broadening your search query or role filter.",
       "suspendedBadge": "Suspended",
       "planLabel": "Garage subscription plan",
+      "userPlanLabel": "User subscription plan",
       "roleSelectAria": "Account role",
       "unsuspendBtn": "Restore",
       "suspendBtn": "Suspend",
