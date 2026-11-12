@@ -84,6 +84,14 @@ export function AuthProvider({
 
       const response = await callSessionEndpoint(idToken);
       if (!response.ok) {
+        try {
+          const client = getFirebaseClient();
+          if (client?.auth) {
+            await firebaseSignOut(client.auth);
+          }
+        } catch {
+          // Ignore cleanup errors
+        }
         const errPayload = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
@@ -181,13 +189,17 @@ export function AuthProvider({
 
     // 3. Clear server session cookies across all handlers
     try {
-      await fetch("/api/auth/session", { method: "DELETE" });
+      await fetch("/api/auth/session", {
+        method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
+      });
     } catch (err) {
       console.warn("Sign-out server cookie delete error:", err);
     }
 
-    // 4. Clean navigation to /login
-    window.location.href = "/login";
+    // 4. Route through /logout edge middleware for a guaranteed cookie wipe -> /login
+    window.location.href = "/logout";
   }, []);
 
   const value = useMemo<AuthContextValue>(
