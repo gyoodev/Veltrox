@@ -1,6 +1,6 @@
 import "server-only";
 
-import webpush from "web-push";
+import { sendNotification, setVapidDetails } from "web-push";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import type { PushSubscriptionRecord } from "@/types/domain";
 
@@ -39,7 +39,7 @@ export async function sendWebPushToUser(params: {
 
   const subject =
     process.env.VAPID_SUBJECT?.trim() || "mailto:support@veltrox.bg";
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+  setVapidDetails(subject, publicKey, privateKey);
 
   const snap = await admin.adminDb
     .collection("pushSubscriptions")
@@ -64,7 +64,7 @@ export async function sendWebPushToUser(params: {
     snap.docs.map(async (doc) => {
       const sub = doc.data() as PushSubscriptionRecord;
       try {
-        await webpush.sendNotification(
+        await sendNotification(
           {
             endpoint: sub.endpoint,
             keys: sub.keys,
