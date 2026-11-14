@@ -80,7 +80,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           error: "FREE_PLAN_LIMIT_REACHED",
           limit: settings.freeUserVehicleLimit,
           currentCount: existingSnap.size,
-          upgradePath: "/app/profile",
+          upgradePath: "/app/subscription",
           subscriptionsEnabled: settings.userSubscriptionsEnabled,
         },
         { status: 402 }

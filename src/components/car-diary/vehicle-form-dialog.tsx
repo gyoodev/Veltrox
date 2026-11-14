@@ -215,7 +215,7 @@ export function VehicleFormDialog({
               label: tCommon("upgradeToPro"),
               onClick: () => {
                 onOpenChange(false);
-                router.push(errJson.upgradePath || "/app/profile");
+                router.push(errJson.upgradePath || "/app/subscription");
               },
             },
           });

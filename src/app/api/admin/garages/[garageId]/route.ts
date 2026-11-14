@@ -24,6 +24,7 @@ export async function PATCH(
   const body = (await request.json().catch(() => null)) as {
     status?: "approved" | "pending" | "suspended" | "rejected";
     plan?: "free" | "pro";
+    billingCycle?: "monthly" | "annual";
   } | null;
 
   if (!body) {
@@ -49,6 +50,15 @@ export async function PATCH(
 
   if (body.plan && ["free", "pro"].includes(body.plan)) {
     updates.plan = body.plan;
+    updates.monthlyReminderQuota = body.plan === "pro" ? 500 : 50;
+    updates.subscriptionStatus = body.plan === "pro" ? "active" : "canceled";
+    updates.billingCycle =
+      body.plan === "pro"
+        ? body.billingCycle && ["monthly", "annual"].includes(body.billingCycle)
+          ? body.billingCycle
+          : currentGarage.billingCycle ?? "monthly"
+        : null;
+    updates.planUpdatedAt = nowIso;
   }
 
   await garageRef.update(updates);

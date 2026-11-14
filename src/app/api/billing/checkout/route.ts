@@ -161,7 +161,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const origin = resolveRequestOrigin(request);
-  const returnPath = target === "user" ? "/app/profile" : "/garage/settings";
+  const returnPath =
+    target === "user" ? "/app/subscription" : "/garage/subscription";
   const checkout = await createStripeCheckoutSession({
     target,
     targetId,

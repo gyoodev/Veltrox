@@ -68,7 +68,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const origin = resolveRequestOrigin(request);
   const returnUrl =
-    target === "user" ? `${origin}/app/profile` : `${origin}/garage/settings`;
+    target === "user"
+      ? `${origin}/app/subscription`
+      : `${origin}/garage/subscription`;
 
   const portal = await createStripePortalSession({
     stripeCustomerId,

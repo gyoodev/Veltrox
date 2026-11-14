@@ -220,7 +220,7 @@ export function QuickWorkOrderDialog({
             label: tCommon("upgradeToPro"),
             onClick: () => {
               onOpenChange(false);
-              router.push(errJson.upgradePath || "/garage/settings");
+              router.push(errJson.upgradePath || "/garage/subscription");
             },
           },
         });

@@ -92,7 +92,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           error: "FREE_PLAN_LIMIT_REACHED",
           limit: settings.freeGarageMonthlyWorkOrders,
           currentCount: monthlyCount,
-          upgradePath: "/garage/settings",
+          upgradePath: "/garage/subscription",
           subscriptionsEnabled: settings.garageSubscriptionsEnabled,
         },
         { status: 402 }

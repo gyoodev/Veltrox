@@ -11,13 +11,16 @@ import {
   ClipboardList,
   Clock,
   Compass,
+  CreditCard,
   Disc3,
   FileClock,
   FolderLock,
   LayoutDashboard,
+  LayoutGrid,
   type LucideIcon,
   LogOut,
   Megaphone,
+  Menu,
   Package,
   PieChart,
   Send,
@@ -28,11 +31,12 @@ import {
   Users,
   UserSquare2,
   Wrench,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { BulgariaFuelPricesWidget } from "@/components/profile/bulgaria-fuel-prices-widget";
 import { useAuth } from "@/components/providers/auth-provider";
 import { AnnouncementBanner } from "@/components/shared/announcement-banner";
@@ -77,6 +81,20 @@ export function DashboardShell({
   const tShell = useTranslations("shell");
   const tCommon = useTranslations("common");
   const tDash = useTranslations("dashboards");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mobileMenuOpen]);
 
   const activeProfile = clientProfile ?? serverProfile;
 
@@ -193,6 +211,12 @@ export function DashboardShell({
           mobilePrimary: false,
         },
         {
+          href: "/garage/subscription",
+          label: tShell("subscriptionNav"),
+          icon: CreditCard,
+          mobilePrimary: false,
+        },
+        {
           href: "/garage/settings",
           label: tShell("garageSettingsNav"),
           icon: Settings,
@@ -246,7 +270,13 @@ export function DashboardShell({
       href: "/app/garages",
       label: tShell("findGarageNav"),
       icon: Compass,
-      mobilePrimary: true,
+      mobilePrimary: false,
+    },
+    {
+      href: "/app/subscription",
+      label: tShell("subscriptionNav"),
+      icon: CreditCard,
+      mobilePrimary: false,
     },
     {
       href: "/app/profile",
@@ -264,21 +294,9 @@ export function DashboardShell({
       mobilePrimary: true,
     },
     {
-      href: "/admin/garages",
-      label: tShell("garagesNav"),
-      icon: Wrench,
-      mobilePrimary: true,
-    },
-    {
       href: "/admin/approvals",
       label: tShell("approvalsNav"),
       icon: Building2,
-      mobilePrimary: false,
-    },
-    {
-      href: "/admin/operations",
-      label: tShell("operationsNav"),
-      icon: ClipboardList,
       mobilePrimary: true,
     },
     {
@@ -288,10 +306,28 @@ export function DashboardShell({
       mobilePrimary: true,
     },
     {
+      href: "/admin/subscriptions",
+      label: tShell("subscriptionsNav"),
+      icon: CreditCard,
+      mobilePrimary: true,
+    },
+    {
+      href: "/admin/garages",
+      label: tShell("garagesNav"),
+      icon: Wrench,
+      mobilePrimary: false,
+    },
+    {
+      href: "/admin/operations",
+      label: tShell("operationsNav"),
+      icon: ClipboardList,
+      mobilePrimary: false,
+    },
+    {
       href: "/admin/vehicles",
       label: tShell("vehiclesNav"),
       icon: Car,
-      mobilePrimary: true,
+      mobilePrimary: false,
     },
     {
       href: "/admin/broadcast",
@@ -309,7 +345,7 @@ export function DashboardShell({
       href: "/admin/system",
       label: tShell("systemNav"),
       icon: Activity,
-      mobilePrimary: true,
+      mobilePrimary: false,
     },
     {
       href: "/admin/analytics",
@@ -344,7 +380,7 @@ export function DashboardShell({
         ? adminNavLinks
         : userNavLinks;
 
-  const mobileLinks = navLinks.filter((i) => i.mobilePrimary);
+  const mobileLinks = navLinks.filter((i) => i.mobilePrimary).slice(0, 4);
 
   const isNavItemActive = (href: string): boolean => {
     if (href === "/app" || href === "/garage" || href === "/admin") {
@@ -485,7 +521,18 @@ export function DashboardShell({
       <div className="flex flex-1 flex-col pb-20 md:pb-0 print:pb-0">
         {/* Top Bar */}
         <header className="glass-panel sticky top-0 z-20 flex h-16 items-center justify-between px-4 sm:px-8 print:hidden">
-          <div className="flex items-center gap-3 md:hidden">
+          <div className="flex items-center gap-2.5 md:hidden">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={tShell("openMenu")}
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen(true)}
+              className="h-10 w-10 rounded-xl border border-border/70 bg-secondary/40"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
             <Logo href={homeHref} />
           </div>
           <div className="hidden md:block">
@@ -558,12 +605,20 @@ export function DashboardShell({
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {activeProfile.role === "USER" ? (
-                  <DropdownMenuItem asChild>
-                    <Link href="/app/documents">
-                      <FolderLock className="h-4 w-4" />
-                      {tShell("documentsNav")}
-                    </Link>
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/app/documents">
+                        <FolderLock className="h-4 w-4" />
+                        {tShell("documentsNav")}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/app/subscription">
+                        <CreditCard className="h-4 w-4" />
+                        {tShell("subscriptionNav")}
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
                 ) : null}
                 {activeProfile.role === "GARAGE_OWNER" && !isPendingGarage ? (
                   <DropdownMenuItem asChild>
@@ -584,6 +639,12 @@ export function DashboardShell({
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
+                      <Link href="/garage/subscription">
+                        <CreditCard className="h-4 w-4" />
+                        {tShell("subscriptionNav")}
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
                       <Link href="/garage/settings">
                         <Settings className="h-4 w-4" />
                         {tShell("garageSettingsNav")}
@@ -592,42 +653,58 @@ export function DashboardShell({
                   </>
                 ) : null}
                 {activeProfile.role === "ADMIN" ? (
-                  <div className="p-1 mb-1">
-                    <Link
-                      href={isAdminSection ? "/app" : "/admin"}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition-all shadow-sm",
-                        isAdminSection
-                          ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-                          : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        {isAdminSection ? (
-                          <>
-                            <LayoutDashboard className="h-4 w-4 text-primary" />
-                            <span>{tShell("userPanelBtn")}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Shield className="h-4 w-4 text-amber-400" />
-                            <span>{tShell("adminPanelBtn")}</span>
-                          </>
-                        )}
-                      </span>
-                      <Badge
-                        variant="outline"
+                  <>
+                    <div className="p-1 mb-1">
+                      <Link
+                        href={isAdminSection ? "/app" : "/admin"}
                         className={cn(
-                          "text-[9px] px-1.5 py-0 font-mono font-bold",
+                          "flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition-all shadow-sm",
                           isAdminSection
-                            ? "border-primary/40 text-primary"
-                            : "border-amber-500/40 text-amber-400"
+                            ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                            : "border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
                         )}
                       >
-                        {isAdminSection ? "USER" : "ADMIN"}
-                      </Badge>
-                    </Link>
-                  </div>
+                        <span className="flex items-center gap-2">
+                          {isAdminSection ? (
+                            <>
+                              <LayoutDashboard className="h-4 w-4 text-primary" />
+                              <span>{tShell("userPanelBtn")}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Shield className="h-4 w-4 text-amber-400" />
+                              <span>{tShell("adminPanelBtn")}</span>
+                            </>
+                          )}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px] px-1.5 py-0 font-mono font-bold",
+                            isAdminSection
+                              ? "border-primary/40 text-primary"
+                              : "border-amber-500/40 text-amber-400"
+                          )}
+                        >
+                          {isAdminSection ? "USER" : "ADMIN"}
+                        </Badge>
+                      </Link>
+                    </div>
+                    <DropdownMenuItem asChild>
+                      <Link
+                        href={
+                          isAdminSection
+                            ? "/admin/subscriptions"
+                            : "/app/subscription"
+                        }
+                      >
+                        <CreditCard className="h-4 w-4" />
+                        {isAdminSection
+                          ? tShell("subscriptionsNav")
+                          : tShell("subscriptionNav")}
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
                 ) : null}
                 <DropdownMenuItem asChild>
                   <Link href={profileHref}>
@@ -653,16 +730,18 @@ export function DashboardShell({
 
         {/* Mobile-only Admin Quick-Switch Strip */}
         {activeProfile.role === "ADMIN" ? (
-          <div className="md:hidden border-b border-border/70 bg-secondary/40 backdrop-blur px-4 py-2 flex items-center justify-between text-xs print:hidden">
-            <div className="flex items-center gap-2">
+          <div className="md:hidden border-b border-border/70 bg-secondary/40 backdrop-blur px-4 py-2 flex items-center justify-between gap-2 text-xs print:hidden">
+            <div className="flex items-center gap-2 min-w-0">
               <span
                 className={cn(
-                  "h-2 w-2 rounded-full",
+                  "h-2 w-2 shrink-0 rounded-full",
                   isAdminSection ? "bg-amber-400 animate-pulse" : "bg-primary"
                 )}
               />
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                {isAdminSection ? "Админ режим" : "Потребителски"}
+              <span className="truncate text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {isAdminSection
+                  ? tShell("adminModeBadge")
+                  : tShell("userModeBadge")}
               </span>
             </div>
             <Button
@@ -670,7 +749,7 @@ export function DashboardShell({
               size="sm"
               variant="outline"
               className={cn(
-                "h-7 text-xs px-2.5 py-0 rounded-lg font-semibold gap-1.5 shadow-sm transition-all",
+                "h-7 shrink-0 text-xs px-2.5 py-0 rounded-lg font-semibold gap-1.5 shadow-sm transition-all",
                 isAdminSection
                   ? "border-primary/50 text-primary bg-primary/10 hover:bg-primary/20"
                   : "border-amber-500/50 text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
@@ -679,13 +758,13 @@ export function DashboardShell({
               <Link href={isAdminSection ? "/app" : "/admin"}>
                 {isAdminSection ? (
                   <>
-                    <LayoutDashboard className="h-3.5 w-3.5" />
-                    <span>Към Потребителски</span>
+                    <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
+                    <span>{tShell("userPanelBtn")}</span>
                   </>
                 ) : (
                   <>
-                    <Shield className="h-3.5 w-3.5 text-amber-400" />
-                    <span>Към Админ панел</span>
+                    <Shield className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <span>{tShell("adminPanelBtn")}</span>
                   </>
                 )}
               </Link>
@@ -730,6 +809,164 @@ export function DashboardShell({
         </main>
       </div>
 
+      {/* Mobile Slide-Over Workspace Drawer */}
+      {mobileMenuOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={tShell("mobileMenuTitle")}
+          className="fixed inset-0 z-50 flex md:hidden print:hidden"
+        >
+          <button
+            type="button"
+            aria-label={tCommon("close")}
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+          />
+
+          <aside className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-background shadow-2xl">
+            <div className="flex h-16 items-center justify-between border-b border-border px-5">
+              <Logo href={homeHref} />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={tCommon("close")}
+                onClick={() => setMobileMenuOpen(false)}
+                className="h-9 w-9 rounded-xl"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="px-4 py-3">
+              <div className="rounded-2xl border border-border bg-secondary/40 p-3">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {activeProfile.displayName}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {activeProfile.email}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <Badge variant={isStaffMember ? "violet" : "default"}>
+                    {roleLabel}
+                  </Badge>
+                  {activeProfile.role === "GARAGE_OWNER" && !isStaffMember ? (
+                    <Badge
+                      variant={
+                        activeProfile.garageStatus === "approved"
+                          ? "success"
+                          : "warning"
+                      }
+                    >
+                      {activeProfile.garageStatus === "approved"
+                        ? tCommon("statusApproved")
+                        : activeProfile.garageStatus === "rejected"
+                          ? tCommon("statusRejected")
+                          : tCommon("statusPending")}
+                    </Badge>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <nav
+              className="flex-1 space-y-1 overflow-y-auto px-3 pb-4"
+              aria-label="Mobile full navigation"
+            >
+              {navLinks.map((item) => {
+                const Icon = item.icon;
+                const isActive = !item.disabled && isNavItemActive(item.href);
+
+                if (item.disabled) {
+                  return (
+                    <div
+                      key={item.label}
+                      aria-disabled="true"
+                      className="flex min-h-11 items-center justify-between rounded-xl px-3.5 py-2.5 text-sm text-muted-foreground/60"
+                    >
+                      <span className="flex items-center gap-3">
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span>{item.label}</span>
+                      </span>
+                      {item.badge ? (
+                        <Badge variant="outline" className="text-[10px]">
+                          {item.badge}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all",
+                      isActive
+                        ? "bg-veltrox-gradient text-white shadow-glow-blue"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {activeProfile.role === "ADMIN" ? (
+              <div className="px-3 pb-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "w-full justify-start h-10 gap-2 text-xs font-semibold rounded-xl",
+                    isAdminSection
+                      ? "border-primary/45 text-primary bg-primary/[0.08]"
+                      : "border-amber-500/50 text-amber-400 bg-amber-500/[0.08]"
+                  )}
+                >
+                  <Link
+                    href={isAdminSection ? "/app" : "/admin"}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {isAdminSection ? (
+                      <>
+                        <LayoutDashboard className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{tShell("userPanelBtn")}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="h-4 w-4 shrink-0 text-amber-400" />
+                        <span className="truncate">{tShell("adminPanelBtn")}</span>
+                      </>
+                    )}
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="border-t border-border p-3">
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-muted-foreground hover:text-destructive"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  void signOut();
+                }}
+              >
+                <LogOut className="h-4 w-4" />
+                {tCommon("signOut")}
+              </Button>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
       {/* Mobile Bottom Navigation Bar (Large >=48px Tap Targets) */}
       <nav
         aria-label="Mobile workspace navigation"
@@ -738,7 +975,7 @@ export function DashboardShell({
         <div
           className="grid gap-1 px-2 py-1.5 w-full"
           style={{
-            gridTemplateColumns: `repeat(${mobileLinks.length}, minmax(0, 1fr))`,
+            gridTemplateColumns: `repeat(${mobileLinks.length + 1}, minmax(0, 1fr))`,
           }}
         >
           {mobileLinks.map((item) => {
@@ -774,6 +1011,24 @@ export function DashboardShell({
               </Link>
             );
           })}
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label={tShell("openMenu")}
+            aria-expanded={mobileMenuOpen}
+            className={cn(
+              "flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-1 text-[10px] font-medium transition-colors",
+              mobileMenuOpen
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <LayoutGrid className="h-5 w-5" aria-hidden="true" />
+            <span className="mt-0.5 max-w-full truncate">
+              {tShell("moreNav")}
+            </span>
+          </button>
         </div>
       </nav>
     </div>

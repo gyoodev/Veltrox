@@ -158,8 +158,15 @@ export async function PATCH(
       .doc(targetUser.garageId);
     const garageSnap = await garageRef.get();
     if (garageSnap.exists) {
+      const nextCycle =
+        updates.garagePlan === "pro"
+          ? updates.billingCycle ?? "monthly"
+          : null;
       await garageRef.update({
         plan: updates.garagePlan,
+        subscriptionStatus: updates.garagePlan === "pro" ? "active" : "canceled",
+        billingCycle: nextCycle,
+        planUpdatedAt: nowIso,
         monthlyReminderQuota: newQuota,
         updatedAt: nowIso,
       });
@@ -172,6 +179,7 @@ export async function PATCH(
         targetGarageId: targetUser.garageId,
         metadata: {
           plan: updates.garagePlan,
+          billingCycle: nextCycle,
           monthlyReminderQuota: newQuota,
         },
         createdAt: nowIso,
@@ -182,9 +190,17 @@ export async function PATCH(
 
   if (updates.userPlan) {
     const previousPlan = targetUser.plan ?? "free";
+    const nextCycle =
+      updates.userPlan === "pro"
+        ? updates.billingCycle ?? targetUser.billingCycle ?? "monthly"
+        : null;
     firestorePatch.plan = updates.userPlan;
+    firestorePatch.subscriptionStatus =
+      updates.userPlan === "pro" ? "active" : "canceled";
+    firestorePatch.billingCycle = nextCycle;
+    firestorePatch.planUpdatedAt = nowIso;
 
-    if (updates.userPlan !== previousPlan) {
+    if (updates.userPlan !== previousPlan || updates.billingCycle) {
       await admin.adminDb.collection("auditLogs").add({
         action: "USER_PLAN_UPDATED",
         actorUid: auth.session.uid,
@@ -194,6 +210,7 @@ export async function PATCH(
         metadata: {
           previousPlan,
           newPlan: updates.userPlan,
+          billingCycle: nextCycle,
           email: targetUser.email,
         },
         createdAt: nowIso,

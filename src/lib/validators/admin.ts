@@ -28,6 +28,7 @@ export const adminUserUpdateSchema = z.object({
   role: z.enum(USER_ROLES).optional(),
   garagePlan: z.enum(["free", "pro"]).optional(),
   userPlan: z.enum(["free", "pro"]).optional(),
+  billingCycle: z.enum(["monthly", "annual"]).optional(),
 });
 
 export type AdminUserUpdateInput = z.infer<typeof adminUserUpdateSchema>;
