@@ -7,7 +7,10 @@ export default async function GarageAppointmentsPage() {
   const bundle = await getGarageWorkspaceBundle(garage.id);
 
   return (
-    <AppointmentsCalendarClient initialAppointments={bundle.appointments} />
+    <AppointmentsCalendarClient
+      garageId={garage.id}
+      initialAppointments={bundle.appointments}
+    />
   );
 }
 

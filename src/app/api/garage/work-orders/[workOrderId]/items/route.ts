@@ -1,65 +1,22 @@
 import { NextResponse } from "next/server";
 import { resolveGarageApiAuth } from "@/lib/auth/server-auth";
 import {
+  recalculateWorkOrderTotals,
   syncCompletedWorkOrderToCarDiary,
   syncPublicWorkOrderProjection,
 } from "@/lib/data/garage";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { workOrderItemFormSchema } from "@/lib/validators/garage";
-import type { WorkOrder, WorkOrderItem } from "@/types/domain";
+import type {
+  InventoryPart,
+  WorkOrder,
+  WorkOrderItem,
+} from "@/types/domain";
 
 export const runtime = "nodejs";
 
 interface RouteContext {
   params: Promise<{ workOrderId: string }>;
-}
-
-async function recalculateWorkOrderTotals(
-  garageId: string,
-  workOrderId: string
-): Promise<{
-  workOrder: WorkOrder;
-  items: WorkOrderItem[];
-} | null> {
-  const admin = getFirebaseAdmin();
-  if (!admin) return null;
-
-  const woRef = admin.adminDb.collection("workOrders").doc(workOrderId);
-  const woSnap = await woRef.get();
-  if (!woSnap.exists) return null;
-
-  const wo = woSnap.data() as WorkOrder;
-  if (wo.garageId !== garageId) return null;
-
-  const itemsSnap = await admin.adminDb
-    .collection("workOrderItems")
-    .where("workOrderId", "==", workOrderId)
-    .get();
-
-  const items = itemsSnap.docs
-    .map((d) => ({ ...(d.data() as WorkOrderItem), id: d.id }))
-    .filter((i) => i.garageId === garageId)
-    .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
-
-  let totalLabor = 0;
-  let totalParts = 0;
-  for (const item of items) {
-    if (item.type === "labor") totalLabor += item.totalPrice;
-    else totalParts += item.totalPrice;
-  }
-
-  const updated: WorkOrder = {
-    ...wo,
-    id: workOrderId,
-    totalLaborAmount: Number(totalLabor.toFixed(2)),
-    totalPartsAmount: Number(totalParts.toFixed(2)),
-    totalAmount: Number((totalLabor + totalParts).toFixed(2)),
-    updatedAt: new Date().toISOString(),
-  };
-
-  await woRef.set(updated);
-
-  return { workOrder: updated, items };
 }
 
 export async function POST(
@@ -113,6 +70,11 @@ export async function POST(
   const data = parsed.data;
   const itemRef = admin.adminDb.collection("workOrderItems").doc();
   const totalPrice = Number((data.quantity * data.unitPrice).toFixed(2));
+  const partId = data.inventoryPartId?.trim() || null;
+
+  let resolvedSku = data.sku?.trim().toUpperCase() || null;
+  let resolvedCostPrice =
+    typeof data.costPrice === "number" ? Number(data.costPrice.toFixed(2)) : null;
 
   const item: WorkOrderItem = {
     id: itemRef.id,
@@ -124,10 +86,38 @@ export async function POST(
     quantity: data.quantity,
     unitPrice: data.unitPrice,
     totalPrice,
+    inventoryPartId: partId,
+    sku: resolvedSku,
+    costPrice: resolvedCostPrice,
     createdAt: new Date().toISOString(),
   };
 
-  await itemRef.set(item);
+  if (partId) {
+    const partRef = admin.adminDb.collection("inventoryParts").doc(partId);
+    await admin.adminDb.runTransaction(async (tx) => {
+      const partSnap = await tx.get(partRef);
+      if (partSnap.exists) {
+        const partData = partSnap.data() as InventoryPart;
+        if (partData.garageId === garageId) {
+          resolvedSku = resolvedSku ?? partData.sku;
+          resolvedCostPrice = resolvedCostPrice ?? partData.costPrice;
+          item.sku = resolvedSku;
+          item.costPrice = resolvedCostPrice;
+          const nextStock = Math.max(
+            0,
+            Number((partData.stockQty - data.quantity).toFixed(2))
+          );
+          tx.update(partRef, {
+            stockQty: nextStock,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+      tx.set(itemRef, item);
+    });
+  } else {
+    await itemRef.set(item);
+  }
 
   const recalculated = await recalculateWorkOrderTotals(garageId, workOrderId);
   if (!recalculated) {
@@ -194,7 +184,26 @@ export async function DELETE(
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   }
 
-  await itemRef.delete();
+  if (existing.inventoryPartId) {
+    const partRef = admin.adminDb
+      .collection("inventoryParts")
+      .doc(existing.inventoryPartId);
+    await admin.adminDb.runTransaction(async (tx) => {
+      const partSnap = await tx.get(partRef);
+      if (partSnap.exists) {
+        const partData = partSnap.data() as InventoryPart;
+        if (partData.garageId === garageId) {
+          tx.update(partRef, {
+            stockQty: Number((partData.stockQty + existing.quantity).toFixed(2)),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+      tx.delete(itemRef);
+    });
+  } else {
+    await itemRef.delete();
+  }
 
   const recalculated = await recalculateWorkOrderTotals(garageId, workOrderId);
   if (!recalculated) {

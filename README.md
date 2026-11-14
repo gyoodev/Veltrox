@@ -36,23 +36,27 @@ Veltrox connects **car owners** and **independent automotive workshops** in one 
 - **Smart Reminders**: Due-date and target-mileage reminders with visual status badges (`ok`, `upcoming`, `overdue`).
 - **Documents Vault**: Store insurance policies, vignettes, technical inspections (GTP), tax receipts, and driving licenses with expiry countdown alerts.
 - **Printable PDF Service Book**: Cyrillic-safe, print-optimized vehicle history dossier (`/app/cars/[vehicleId]/service-book`) ready for resale buyers.
-- **Public Garage Directory & Online Booking**: Browse verified workshops by city and specialty (`/garages`, `/garages/[slug]`), submit online appointment requests, and receive automatic service diary entries from linked garages.
+- **Public Garage Directory & Online Booking**: Browse verified workshops by city and specialty (`/garages`, `/garages/[slug]`), book real-time bay-available appointment slots, and receive automatic service diary entries from linked garages.
 - **Live Bulgaria Fuel Prices Widget (`/app/profile`, `/garage/profile`, `/admin/profile`)**: Real-time Bulgarian retail pump averages (`Petrol A95`, `Diesel`, `LPG`, `CNG/Methane`) in `EUR` + fixed-rate `BGN`, 30-day Recharts trend sparklines, and an interactive trip fuel cost calculator.
+- **Self-Serve Driver Pro Billing & Web Push Alerts (`/app/profile`)**: Configurable Free-tier vehicle quotas (`freeUserVehicleLimit`), monthly/annual plans with promotional discount codes, Stripe Checkout/Portal integration (with instant local simulation fallback), and browser Web Push notifications toggle.
 
 ### 2. Garages & Workshop Staff (`GARAGE_OWNER` — `/garage/*`)
-- **Approval-Gated Onboarding Wizard**: Newly registered garages start in `pending` state until verified, then complete a guided setup for business profile, city, services catalog, working hours, logo, and public directory slug.
+- **Approval-Gated Onboarding Wizard**: Newly registered garages start in `pending` state until verified, then complete a guided setup for business profile, city, services catalog, working hours, concurrent bays (`concurrentBays`), logo, and public directory slug.
 - **License-Plate-First Customer Lookup**: Instant search by normalized license plate, phone, or customer name with complete cross-visit repair history and car-owner diary opt-in linking.
-- **Sub-30-Second Mobile-First Work Orders**: Rapid intake on phone or tablet with live workflow stages (`received` → `diagnosing` → `waiting_parts` → `in_progress` → `ready` → `completed`), itemized parts/labor lines, mechanic assignment, and automatic diary sync upon completion.
-- **Zero-Login Public Repair Status Link (`/status/[token]`)**: Shareable status tracker powered by a whitelisted Firestore projection (`workOrderPublicStatus`) with masked license plates (`CB **** AB`) and zero exposed PII.
-- **Appointments Calendar**: Day and week schedule views for walk-in bookings and online requests (`requested`, `confirmed`, `completed`, `cancelled`) with 1-click conversion into an active Work Order.
+- **Sub-30-Second Mobile-First Work Orders**: Rapid intake on phone or tablet with live workflow stages (`received` → `diagnosing` → `waiting_parts` → `in_progress` → `ready` → `completed`), itemized parts/labor lines (with inventory SKU auto-fill), intake fuel & visual condition protocol, OBD-II DTC trouble codes & diagnostic notes, before/after repair photo galleries, mechanic assignment, and automatic diary sync upon completion.
+- **Zero-Login Public Repair Status Link & Quote Approval (`/status/[token]`)**: Shareable status tracker powered by a whitelisted Firestore projection (`workOrderPublicStatus`) with masked license plates (`CB **** AB`), zero exposed PII, live OBD-II diagnostics & before/after photos, and interactive **1-click Customer Repair Quote Approval/Decline** (`/api/status/[token]/quote`).
+- **Printable Intake Protocol & Service Invoice PDFs (`/garage/work-orders/[workOrderId]/print`)**: Print-ready intake condition checklist and itemized customer service invoice views (`?doc=intake|invoice`).
+- **Parts Inventory & Supplier Margin Tracking (`/garage/inventory`)**: Manage spare parts SKUs, suppliers, supplier cost vs. sell price, and minimum stock alerts with atomic Firestore transactions that deduct/restock inventory on work-order parts and feed gross profit & margin KPIs into `/garage/analytics`.
+- **Real-Time Bay-Capacity Appointments Calendar**: Day and week schedule views for walk-in bookings and online requests (`requested`, `confirmed`, `completed`, `cancelled`) with live slot availability checking (`/api/appointments/availability`, `409 SLOT_UNAVAILABLE` guard against working hours & concurrent bay capacity) and 1-click conversion into an active Work Order.
 - **Workshop Staff RBAC**: Invite `mechanic` and `receptionist` accounts scoped to the garage via Firebase Custom Claims while restricting billing/settings, staff management, CSV exports, and destructive deletes to the garage owner.
 - **Seasonal Tyre Hotel**: Track stored customer tyre sets (`summer`, `winter`, `all_season`) with warehouse/rack/shelf coordinates, tread depth (`mm`), condition notes, and check-in/mounted status.
-- **Plan Quotas & CSV Exports**: Built-in monthly reminder quota tracking (`Free`: 50/mo, `Pro`: 500/mo) and UTF-8 CSV exports for work orders and customers.
+- **Plan Quotas, Billing & CSV Exports**: Built-in Free monthly work-order limits (`freeGarageMonthlyWorkOrders`), monthly reminder quota tracking (`Free`: 50/mo, `Pro`: 500/mo), self-serve **Garage Pro** billing with annual discounts/promo codes in `/garage/settings`, and UTF-8 CSV exports for work orders and customers.
 
 ### 3. Platform Administrators (`ADMIN` — `/admin/*`)
 - **Non-Self-Assignable Governance Role**: `ADMIN` cannot be chosen during sign-up under any circumstance; accounts are promoted exclusively via server-side Admin SDK tooling and audited in immutable `auditLogs`.
 - **Garage Verification Queue (`/admin/approvals`)**: Review pending workshop applications, approve in 1 click, or reject with an explanatory reason synced to Custom Claims and notifications.
-- **Users & Garages Governance (`/admin/users`)**: Search accounts, change roles, suspend/unsuspend abusive accounts (with token revocation), and switch workshops between `Free` (`50/mo`) and `Pro` (`500/mo`) reminder plans.
+- **Users & Garages Governance (`/admin/users`)**: Search accounts, change roles, suspend/unsuspend abusive accounts (with token revocation), and switch users/workshops between `Free` and `Pro` plans.
+- **Platform Settings, Pricing & Live Integrations (`/admin/settings`)**: Configure `Driver Pro` (`userProPlanPriceEur`) & `Garage Pro` (`proPlanPriceEur`) monthly prices, Free-tier limits, annual billing discount %, promotional discount codes (`promoCodes`), feature toggles, and monitor Live vs. Simulated status across Stripe, Resend, Twilio SMS, Viber Business, and Web Push VAPID.
 - **System & Subscription Analytics (`/admin/analytics`)**: Real Firestore counts, 6-month growth charts, `Free` vs. `Pro` MRR/ARR breakdown, reminder telemetry, and 1-click manual Reminder Sweep execution.
 - **Live Bilingual CMS (`/admin/content`) & Audit Trail (`/admin/audit-logs`)**: Publish bilingual (`BG`/`EN`) announcement banners and dynamic landing-page FAQs, and inspect filterable immutable security audit logs.
 
@@ -65,9 +69,10 @@ Veltrox connects **car owners** and **independent automotive workshops** in one 
 | **Phase 1** | Foundation, design system, marketing landing page, 3-role Firebase Auth, Edge + Server route guards, GDPR profile & data export/erasure, base Firestore & Storage rules | **Complete** |
 | **Phase 2** | **Car Owner (`USER`)** — vehicles CRUD, chronological diary & receipts, Recharts expense analytics, documents vault, reminders, printable PDF service book, public garage directory & booking | **Complete** |
 | **Phase 3** | **Garage (`GARAGE_OWNER` & Staff)** — onboarding wizard, plate lookup & customer CRM, sub-30s work orders, `/status/[token]` public tracker, calendar, staff RBAC, Tyre Hotel, CSV exports | **Complete** |
-| **Phase 4** | **Reminder Engine & Notifications** — Firebase Cloud Functions v2 daily scheduler (`functions/`) + Vercel Cron (`/api/cron/reminders`), provider abstraction (Email live via Resend HTTP + SMS/Viber mock providers), and workspace Notification Bell | **Complete** |
-| **Phase 5** | **Analytics Dashboards** — `GARAGE_OWNER` (`/garage/analytics` revenue, status breakdown, avg ticket, retention, top services, 1-click overdue outreach, reminder conversion rate) + `ADMIN` (`/admin/analytics`) | **Complete** |
-| **Phase 6** | **Admin Panel, CMS & Polish** — `/admin/approvals`, `/admin/users`, `/admin/content` (bilingual banner & dynamic FAQs + `FAQPage` JSON-LD), `/admin/audit-logs`, WCAG AA skip-links & ARIA polish | **Complete** |
+| **Phase 4** | **Reminder Engine & Notifications** — Firebase Cloud Functions v2 daily scheduler (`functions/`) + Vercel Cron (`/api/cron/reminders`), live multi-channel delivery (Resend Email, Twilio SMS REST, Viber Business REST, Browser Web Push) with simulated fallbacks, and Notification Bell | **Complete** |
+| **Phase 5** | **Analytics Dashboards** — `GARAGE_OWNER` (`/garage/analytics` revenue, gross profit/margin, status breakdown, avg ticket, retention, top services, 1-click overdue outreach, reminder conversion rate) + `ADMIN` (`/admin/analytics`) | **Complete** |
+| **Phase 6** | **Admin Panel, CMS & Polish** — `/admin/approvals`, `/admin/users`, `/admin/settings`, `/admin/content` (bilingual banner & dynamic FAQs + `FAQPage` JSON-LD), `/admin/audit-logs`, WCAG AA skip-links & ARIA polish | **Complete** |
+| **Phase 7** | **Monetization, Live Messaging & Workshop Ops** — Stripe Checkout/Portal/HMAC Webhook + promo/annual billing & free-tier enforcement, Twilio SMS + Viber + `web-push` PWA Service Worker, real bay-capacity slot scheduling, parts inventory & margins, public customer quote approval, intake/OBD-II diagnostics + before/after photos, and printable intake/invoice PDFs | **Complete** |
 
 ---
 
@@ -81,6 +86,10 @@ Veltrox connects **car owners** and **independent automotive workshops** in one 
 | **Motion & Charts** | Framer Motion `12` (`reducedMotion="user"`), Recharts `2.15` |
 | **Forms & Schemas** | `react-hook-form` + `@hookform/resolvers` + shared client/server `Zod` validators |
 | **Backend & Auth** | Firebase Auth (Email/Password + Google), Cloud Firestore, Firebase Storage, `firebase-admin` |
+| **Payments & Billing** | Zero-SDK Stripe REST API (`api.stripe.com`) — Checkout Sessions, Customer Portal & HMAC-SHA256 Webhooks (`STRIPE_WEBHOOK_SECRET`) with local simulation fallback |
+| **SMS & Messaging** | **Twilio SMS** REST API (with E.164 `+359` normalization), **Viber Business** PA REST API, **Resend** transactional Email HTTP API |
+| **Web Push & PWA** | `web-push` (`^4.0.0`, VAPID), Browser PushManager, Service Worker (`public/sw.js`) & PWA Manifest (`public/manifest.webmanifest`) |
+| **Media & Market Data** | **ImgBB** Cloud Upload API (vehicle, intake, and before/after repair photos) & live Bulgarian fuel pump price feeds (`fuelo.net`) |
 | **Localization (`i18n`)** | `next-intl` — Bulgarian (`bg`, default) & English (`en`) with full key parity |
 
 ### Visual Tokens

@@ -6,6 +6,13 @@ import {
   updatePlatformSettings,
 } from "@/lib/data/platform-settings";
 
+const promoCodeSchema = z.object({
+  code: z.string().trim().min(2).max(32),
+  discountPct: z.number().finite().min(1).max(90),
+  active: z.boolean(),
+  appliesTo: z.enum(["all", "user", "garage"]).optional(),
+});
+
 const platformSettingsPatchSchema = z.object({
   maintenanceMode: z.boolean().optional(),
   maintenanceMessage: z.string().trim().max(500).optional(),
@@ -17,6 +24,10 @@ const platformSettingsPatchSchema = z.object({
   proPlanPriceEur: z.number().finite().min(0).max(100_000).optional(),
   userSubscriptionsEnabled: z.boolean().optional(),
   userProPlanPriceEur: z.number().finite().min(0).max(100_000).optional(),
+  freeUserVehicleLimit: z.number().int().min(1).max(1000).optional(),
+  freeGarageMonthlyWorkOrders: z.number().int().min(1).max(100_000).optional(),
+  annualBillingDiscountPct: z.number().finite().min(0).max(80).optional(),
+  promoCodes: z.array(promoCodeSchema).max(50).optional(),
   systemNotice: z.string().trim().max(500).optional(),
 });
 

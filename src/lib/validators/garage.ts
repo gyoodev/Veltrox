@@ -2,6 +2,9 @@ import { z } from "zod";
 import { attachmentItemSchema } from "@/lib/validators/car-diary";
 import { licensePlateSchema } from "@/lib/validators/entities";
 import {
+  DTC_SEVERITIES,
+  FUEL_LEVELS,
+  QUOTE_STATUSES,
   STAFF_ROLES,
   TYRE_SEASONS,
   TYRE_STORAGE_STATUSES,
@@ -63,6 +66,7 @@ export const garageOnboardingSchema = z.object({
     .nullish()
     .or(z.literal("")),
   logoStoragePath: z.string().max(400).nullish(),
+  concurrentBays: z.number().int().min(1).max(20).optional(),
 });
 
 export type GarageOnboardingValues = z.infer<typeof garageOnboardingSchema>;
@@ -131,6 +135,43 @@ export const quickWorkOrderFormSchema = z.object({
 
 export type QuickWorkOrderFormValues = z.infer<typeof quickWorkOrderFormSchema>;
 
+const dtcDiagnosticCodeSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(2)
+    .max(16)
+    .regex(/^[A-Za-z0-9._-]+$/, "fieldTooLong"),
+  description: z.string().trim().min(1).max(200),
+  severity: z.enum(DTC_SEVERITIES),
+});
+
+const workOrderQuoteItemSchema = z.object({
+  id: z.string().min(1).max(64),
+  type: z.enum(["labor", "part"]),
+  description: z.string().trim().min(2).max(160),
+  quantity: z.number().min(0.1).max(1000),
+  unitPrice: z.number().min(0).max(200_000),
+  totalPrice: z.number().min(0).max(2_000_000),
+});
+
+const safeImageUrlArraySchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .max(2048)
+      .refine(
+        (u) =>
+          u.startsWith("http://") ||
+          u.startsWith("https://") ||
+          u.startsWith("/") ||
+          u.startsWith("data:"),
+        { message: "Invalid image URL" }
+      )
+  )
+  .max(16);
+
 export const workOrderPatchSchema = z.object({
   status: z.enum(WORK_ORDER_STATUSES).optional(),
   vehicleLabel: z.string().trim().min(1).max(80).optional(),
@@ -139,6 +180,15 @@ export const workOrderPatchSchema = z.object({
   internalNotes: z.string().trim().max(2000).nullable().optional(),
   currency: z.enum(["EUR", "BGN"]).optional(),
   dropOffPhotos: z.array(attachmentItemSchema).max(8).optional(),
+  beforePhotoUrls: safeImageUrlArraySchema.optional(),
+  afterPhotoUrls: safeImageUrlArraySchema.optional(),
+  intakeFuelLevel: z.enum(FUEL_LEVELS).nullable().optional(),
+  intakeConditionNotes: z.string().trim().max(1000).nullable().optional(),
+  dtcCodes: z.array(dtcDiagnosticCodeSchema).max(30).optional(),
+  diagnosticNotes: z.string().trim().max(2000).nullable().optional(),
+  quoteStatus: z.enum(QUOTE_STATUSES).optional(),
+  quoteNotes: z.string().trim().max(2000).nullable().optional(),
+  quoteItems: z.array(workOrderQuoteItemSchema).max(40).optional(),
   nextServiceDate: z
     .string()
     .nullable()
@@ -168,6 +218,14 @@ export const workOrderItemFormSchema = z.object({
     .number({ invalid_type_error: "costInvalid" })
     .min(0, "costInvalid")
     .max(200_000, "costInvalid"),
+  inventoryPartId: z.string().max(120).nullable().optional(),
+  sku: z.string().trim().max(64).nullable().optional(),
+  costPrice: z
+    .number({ invalid_type_error: "costInvalid" })
+    .min(0, "costInvalid")
+    .max(200_000, "costInvalid")
+    .nullable()
+    .optional(),
 });
 
 export type WorkOrderItemFormValues = z.infer<typeof workOrderItemFormSchema>;

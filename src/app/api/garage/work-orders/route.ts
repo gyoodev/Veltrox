@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getPlatformSettings } from "@/lib/data/platform-settings";
 import { resolveGarageApiAuth } from "@/lib/auth/server-auth";
 import {
   syncCompletedWorkOrderToCarDiary,
@@ -69,9 +70,38 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const data = parsed.data;
   const garageId = auth.garage.id;
+  const nowIso = new Date().toISOString();
+
+  if (auth.garage.plan !== "pro") {
+    const settings = await getPlatformSettings();
+    const monthPrefix = nowIso.slice(0, 7);
+    const garageOrdersSnap = await admin.adminDb
+      .collection("workOrders")
+      .where("garageId", "==", garageId)
+      .select("createdAt")
+      .get();
+
+    const monthlyCount = garageOrdersSnap.docs.filter((doc) => {
+      const createdAt = doc.data()?.createdAt;
+      return typeof createdAt === "string" && createdAt.startsWith(monthPrefix);
+    }).length;
+
+    if (monthlyCount >= settings.freeGarageMonthlyWorkOrders) {
+      return NextResponse.json(
+        {
+          error: "FREE_PLAN_LIMIT_REACHED",
+          limit: settings.freeGarageMonthlyWorkOrders,
+          currentCount: monthlyCount,
+          upgradePath: "/garage/settings",
+          subscriptionsEnabled: settings.garageSubscriptionsEnabled,
+        },
+        { status: 402 }
+      );
+    }
+  }
+
   const plateUpper = data.plateNumber.trim().toUpperCase();
   const plateNormalized = normalizeLicensePlate(plateUpper);
-  const nowIso = new Date().toISOString();
 
   // 1. Check if a registered Car Owner vehicle matches this plate
   const vehSnap = await admin.adminDb

@@ -27,20 +27,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CitySelectCombobox } from "@/components/shared/city-select-combobox";
+import { SubscriptionBillingCard } from "@/components/shared/subscription-billing-card";
 import { getFirebaseClient } from "@/lib/firebase/client";
 import { getEffectiveReminderQuota } from "@/lib/garage-utils";
 import {
   type GarageOnboardingValues,
   garageOnboardingSchema,
 } from "@/lib/validators/garage";
-import { DAYS_OF_WEEK, type Garage } from "@/types/domain";
+import {
+  DAYS_OF_WEEK,
+  type Garage,
+  type PlatformSettingsConfig,
+} from "@/types/domain";
 
 interface GarageSettingsClientProps {
   initialGarage: Garage;
+  platformSettings?: PlatformSettingsConfig | null;
 }
 
 export function GarageSettingsClient({
   initialGarage,
+  platformSettings = null,
 }: GarageSettingsClientProps) {
   const t = useTranslations("garageWorkspace.settings");
   const tOb = useTranslations("garageWorkspace.onboarding");
@@ -49,7 +56,6 @@ export function GarageSettingsClient({
 
   const [garage, setGarage] = useState<Garage>(initialGarage);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [switchingPlan, setSwitchingPlan] = useState(false);
   const [customService, setCustomService] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -66,6 +72,7 @@ export function GarageSettingsClient({
       servicesOffered: garage.servicesOffered,
       logoUrl: garage.logoUrl,
       logoStoragePath: garage.logoStoragePath ?? null,
+      concurrentBays: garage.concurrentBays ?? 2,
     },
   });
 
@@ -97,28 +104,6 @@ export function GarageSettingsClient({
       toast.error("Failed to upload logo.");
     } finally {
       setUploadingLogo(false);
-    }
-  };
-
-  const handleSwitchPlan = async () => {
-    const targetPlan = garage.plan === "pro" ? "free" : "pro";
-    setSwitchingPlan(true);
-    try {
-      const res = await fetch("/api/garage/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: targetPlan }),
-      });
-      if (!res.ok) {
-        toast.error("Could not update plan.");
-        return;
-      }
-      const json = (await res.json()) as { garage: Garage };
-      setGarage(json.garage);
-      toast.success(t("savedToast"));
-      router.refresh();
-    } finally {
-      setSwitchingPlan(false);
     }
   };
 
@@ -236,19 +221,6 @@ export function GarageSettingsClient({
               })}
             </p>
           </div>
-
-          <Button
-            type="button"
-            variant={garage.plan === "pro" ? "outline" : "gradient"}
-            size="sm"
-            disabled={switchingPlan}
-            onClick={() => void handleSwitchPlan()}
-          >
-            {switchingPlan ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : null}
-            {garage.plan === "pro" ? t("switchPlanFree") : t("switchPlanPro")}
-          </Button>
         </div>
 
         <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-secondary">
@@ -258,6 +230,24 @@ export function GarageSettingsClient({
           />
         </div>
       </Card>
+
+      {platformSettings ? (
+        <SubscriptionBillingCard
+          target="garage"
+          currentPlan={garage.plan}
+          subscriptionStatus={garage.subscriptionStatus ?? null}
+          billingCycle={garage.billingCycle ?? null}
+          stripeCustomerId={garage.stripeCustomerId ?? null}
+          settings={platformSettings}
+          onPlanChanged={(nextPlan) => {
+            setGarage((prev) => ({
+              ...prev,
+              plan: nextPlan,
+              monthlyReminderQuota: nextPlan === "pro" ? 500 : 20,
+            }));
+          }}
+        />
+      ) : null}
 
       {/* Main Settings Form */}
       <form onSubmit={onSubmit} className="space-y-6">
@@ -391,12 +381,28 @@ export function GarageSettingsClient({
           </div>
         </Card>
 
-        {/* Working Hours */}
+        {/* Working Hours & Bays */}
         <Card className="space-y-4 p-6">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <Clock className="h-4 w-4 text-primary" />
-            {tOb("step2").replace(/^\d+\.\s*/, "")}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <Clock className="h-4 w-4 text-primary" />
+              {tOb("step2").replace(/^\d+\.\s*/, "")}
+            </h2>
+
+            <div className="flex items-center gap-2">
+              <Label htmlFor="set-bays" className="text-xs text-muted-foreground">
+                {t("concurrentBaysLabel")}
+              </Label>
+              <Input
+                id="set-bays"
+                type="number"
+                min={1}
+                max={20}
+                className="h-9 w-20 font-mono text-xs"
+                {...form.register("concurrentBays", { valueAsNumber: true })}
+              />
+            </div>
+          </div>
 
           <div className="divide-y divide-border">
             {DAYS_OF_WEEK.map((day) => {

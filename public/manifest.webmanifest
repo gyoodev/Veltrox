@@ -1,0 +1,17 @@
+{
+  "name": "Veltrox — Car Service Diary & Garage OS",
+  "short_name": "Veltrox",
+  "description": "Digital vehicle service history, compliance reminders, and workshop management platform.",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
+

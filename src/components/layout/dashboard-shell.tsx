@@ -18,6 +18,7 @@ import {
   type LucideIcon,
   LogOut,
   Megaphone,
+  Package,
   PieChart,
   Send,
   Settings,
@@ -168,6 +169,12 @@ export function DashboardShell({
         label: tShell("tyresNav"),
         icon: Disc3,
         mobilePrimary: true,
+      },
+      {
+        href: "/garage/inventory",
+        label: tShell("inventoryNav"),
+        icon: Package,
+        mobilePrimary: false,
       },
       {
         href: "/garage/analytics",

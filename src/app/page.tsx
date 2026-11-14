@@ -149,6 +149,7 @@ export default async function LandingPage() {
           currency={platformSettings.defaultCurrency}
           userProPriceEur={platformSettings.userProPlanPriceEur}
           garageProPriceEur={platformSettings.proPlanPriceEur}
+          annualBillingDiscountPct={platformSettings.annualBillingDiscountPct}
           userSubscriptionsEnabled={platformSettings.userSubscriptionsEnabled}
           garageSubscriptionsEnabled={platformSettings.garageSubscriptionsEnabled}
         />

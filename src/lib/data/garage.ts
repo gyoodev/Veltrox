@@ -360,6 +360,17 @@ export async function syncPublicWorkOrderProjection(
     totalAmount: workOrder.totalAmount,
     currency: workOrder.currency,
     dropOffPhotoUrls: workOrder.dropOffPhotoUrls,
+    beforePhotoUrls: workOrder.beforePhotoUrls ?? [],
+    afterPhotoUrls: workOrder.afterPhotoUrls ?? [],
+    dtcCodes: workOrder.dtcCodes ?? [],
+    diagnosticNotes: workOrder.diagnosticNotes ?? null,
+    quoteStatus: workOrder.quoteStatus ?? "none",
+    quoteNotes: workOrder.quoteNotes ?? null,
+    quoteItems: workOrder.quoteItems ?? [],
+    quoteTotalAmount: workOrder.quoteTotalAmount ?? 0,
+    quoteRequestedAt: workOrder.quoteRequestedAt ?? null,
+    quoteRespondedAt: workOrder.quoteRespondedAt ?? null,
+    quoteCustomerComment: workOrder.quoteCustomerComment ?? null,
     nextServiceDate: workOrder.nextServiceDate,
     nextServiceMileageKm: workOrder.nextServiceMileageKm,
     createdAt: workOrder.createdAt,
@@ -370,6 +381,56 @@ export async function syncPublicWorkOrderProjection(
     .collection("workOrderPublicStatus")
     .doc(workOrder.publicStatusToken)
     .set(projection);
+}
+
+/**
+ * Recomputes labor, parts, and total amounts on a work order from its line items.
+ */
+export async function recalculateWorkOrderTotals(
+  garageId: string,
+  workOrderId: string
+): Promise<{
+  workOrder: WorkOrder;
+  items: WorkOrderItem[];
+} | null> {
+  const admin = getFirebaseAdmin();
+  if (!admin) return null;
+
+  const woRef = admin.adminDb.collection("workOrders").doc(workOrderId);
+  const woSnap = await woRef.get();
+  if (!woSnap.exists) return null;
+
+  const wo = woSnap.data() as WorkOrder;
+  if (wo.garageId !== garageId) return null;
+
+  const itemsSnap = await admin.adminDb
+    .collection("workOrderItems")
+    .where("workOrderId", "==", workOrderId)
+    .get();
+
+  const items = itemsSnap.docs
+    .map((d) => ({ ...(d.data() as WorkOrderItem), id: d.id }))
+    .filter((i) => i.garageId === garageId)
+    .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+
+  let totalLabor = 0;
+  let totalParts = 0;
+  for (const item of items) {
+    if (item.type === "labor") totalLabor += item.totalPrice;
+    else totalParts += item.totalPrice;
+  }
+
+  const updated: WorkOrder = {
+    ...wo,
+    id: workOrderId,
+    totalLaborAmount: Number(totalLabor.toFixed(2)),
+    totalPartsAmount: Number(totalParts.toFixed(2)),
+    totalAmount: Number((totalLabor + totalParts).toFixed(2)),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await woRef.set(updated);
+  return { workOrder: updated, items };
 }
 
 /**
@@ -408,9 +469,29 @@ export async function syncCompletedWorkOrderToCarDiary(
     )
     .join("\n");
 
-  const combinedNotes = [workOrder.customerSummary, itemLines]
+  const dtcLines =
+    workOrder.dtcCodes && workOrder.dtcCodes.length > 0
+      ? `OBD-II: ${workOrder.dtcCodes
+          .map((d) => `${d.code} (${d.description})`)
+          .join("; ")}`
+      : null;
+
+  const combinedNotes = [
+    workOrder.customerSummary,
+    dtcLines,
+    workOrder.diagnosticNotes,
+    itemLines,
+  ]
     .filter(Boolean)
     .join("\n\n");
+
+  const mergedPhotoUrls = Array.from(
+    new Set([
+      ...(workOrder.dropOffPhotoUrls ?? []),
+      ...(workOrder.beforePhotoUrls ?? []),
+      ...(workOrder.afterPhotoUrls ?? []),
+    ])
+  );
 
   const resolvedMileage =
     workOrder.mileageKm && workOrder.mileageKm > 0
@@ -433,7 +514,7 @@ export async function syncCompletedWorkOrderToCarDiary(
     mileageKm: resolvedMileage,
     costAmount: workOrder.totalAmount,
     currency: workOrder.currency,
-    attachmentUrls: workOrder.dropOffPhotoUrls,
+    attachmentUrls: mergedPhotoUrls,
     attachments: workOrder.dropOffPhotos ?? [],
     createdAt: workOrder.createdAt,
     updatedAt: nowIso,

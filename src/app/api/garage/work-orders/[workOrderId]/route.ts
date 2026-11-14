@@ -7,6 +7,7 @@ import {
 } from "@/lib/data/garage";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { getEffectiveReminderQuota } from "@/lib/garage-utils";
+import { dispatchMultiChannelNotification } from "@/lib/notifications/dispatcher";
 import { workOrderPatchSchema } from "@/lib/validators/garage";
 import type { Reminder, WorkOrder, WorkOrderItem } from "@/types/domain";
 
@@ -199,6 +200,22 @@ export async function PATCH(
       ? data.dropOffPhotos
       : existing.dropOffPhotos ?? [];
 
+  const nextQuoteItems =
+    data.quoteItems !== undefined
+      ? data.quoteItems.map((qi) => ({
+          ...qi,
+          totalPrice: Number((qi.quantity * qi.unitPrice).toFixed(2)),
+        }))
+      : existing.quoteItems ?? [];
+
+  const nextQuoteTotalAmount = Number(
+    nextQuoteItems.reduce((sum, item) => sum + item.totalPrice, 0).toFixed(2)
+  );
+
+  const nextQuoteStatus = data.quoteStatus ?? existing.quoteStatus ?? "none";
+  const quoteNewlySent =
+    existing.quoteStatus !== "pending" && nextQuoteStatus === "pending";
+
   const updated: WorkOrder = {
     ...existing,
     id: workOrderId,
@@ -221,6 +238,54 @@ export async function PATCH(
     currency: data.currency ?? existing.currency,
     dropOffPhotos: nextPhotos,
     dropOffPhotoUrls: nextPhotos.map((p) => p.url),
+    beforePhotoUrls:
+      data.beforePhotoUrls !== undefined
+        ? data.beforePhotoUrls
+        : existing.beforePhotoUrls ?? [],
+    afterPhotoUrls:
+      data.afterPhotoUrls !== undefined
+        ? data.afterPhotoUrls
+        : existing.afterPhotoUrls ?? [],
+    intakeFuelLevel:
+      data.intakeFuelLevel !== undefined
+        ? data.intakeFuelLevel
+        : existing.intakeFuelLevel ?? null,
+    intakeConditionNotes:
+      data.intakeConditionNotes !== undefined
+        ? data.intakeConditionNotes &&
+          data.intakeConditionNotes.trim().length > 0
+          ? data.intakeConditionNotes.trim()
+          : null
+        : existing.intakeConditionNotes ?? null,
+    dtcCodes:
+      data.dtcCodes !== undefined
+        ? data.dtcCodes.map((c) => ({
+            ...c,
+            code: c.code.trim().toUpperCase(),
+          }))
+        : existing.dtcCodes ?? [],
+    diagnosticNotes:
+      data.diagnosticNotes !== undefined
+        ? data.diagnosticNotes && data.diagnosticNotes.trim().length > 0
+          ? data.diagnosticNotes.trim()
+          : null
+        : existing.diagnosticNotes ?? null,
+    quoteStatus: nextQuoteStatus,
+    quoteNotes:
+      data.quoteNotes !== undefined
+        ? data.quoteNotes && data.quoteNotes.trim().length > 0
+          ? data.quoteNotes.trim()
+          : null
+        : existing.quoteNotes ?? null,
+    quoteItems: nextQuoteItems,
+    quoteTotalAmount: nextQuoteTotalAmount,
+    quoteRequestedAt: quoteNewlySent
+      ? nowIso
+      : existing.quoteRequestedAt ?? null,
+    quoteRespondedAt: quoteNewlySent ? null : existing.quoteRespondedAt ?? null,
+    quoteCustomerComment: quoteNewlySent
+      ? null
+      : existing.quoteCustomerComment ?? null,
     nextServiceDate: nextDate,
     nextServiceMileageKm: nextMileage,
     reminderId,
@@ -249,6 +314,42 @@ export async function PATCH(
 
   await woRef.set(updated);
   await syncPublicWorkOrderProjection(updatedGarage, updated, items);
+
+  if (quoteNewlySent) {
+    await admin.adminDb.collection("auditLogs").add({
+      action: "QUOTE_REQUESTED",
+      actorUid: auth.profile.uid,
+      actorRole: auth.profile.role,
+      targetUid: updated.linkedOwnerId,
+      targetGarageId: updatedGarage.id,
+      metadata: {
+        workOrderId,
+        quoteTotalAmount: updated.quoteTotalAmount ?? 0,
+        currency: updated.currency,
+      },
+      createdAt: nowIso,
+    });
+
+    if (updated.linkedOwnerId || updated.customerEmail || updated.customerPhone) {
+      await dispatchMultiChannelNotification({
+        ownerId: updated.linkedOwnerId,
+        garageId: updatedGarage.id,
+        channels: updated.customerEmail ? ["email"] : [],
+        payload: {
+          toEmail: updated.customerEmail ?? null,
+          toPhone: updated.customerPhone ?? null,
+          recipientName: updated.customerName ?? null,
+          locale: "bg",
+          subject: `${updatedGarage.name}: Оферта за одобрение (${updated.vehicleLabel})`,
+          textBody: `Имате нова оферта на стойност ${(updated.quoteTotalAmount ?? 0).toFixed(2)} ${updated.currency}. Моля, прегледайте и потвърдете онлайн.`,
+          actionUrl: `/status/${updated.publicStatusToken}`,
+        },
+        consumeGarageQuota: false,
+      }).catch((err) => {
+        console.warn("Quote notification failed:", err);
+      });
+    }
+  }
 
   return NextResponse.json({
     workOrder: updated,

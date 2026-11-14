@@ -261,6 +261,25 @@ service cloud.firestore {
     // =========================================================================
     // 8. auditLogs/{logId} — Immutable, Admin-Readable, Server-Written Only
     // =========================================================================
+    match /inventoryParts/{partId} {
+      allow read: if isGarageMember(resource.data.garageId) || isAdmin();
+      allow create: if isGarageMember(request.resource.data.garageId);
+      allow update: if (isGarageMember(resource.data.garageId)
+        && request.resource.data.garageId == resource.data.garageId)
+        || isAdmin();
+      allow delete: if isGarageMember(resource.data.garageId) || isAdmin();
+    }
+
+    match /pushSubscriptions/{subId} {
+      allow read: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if (isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid)
+        || isAdmin();
+      allow delete: if (isSignedIn() && resource.data.uid == request.auth.uid) || isAdmin();
+    }
+
     match /auditLogs/{logId} {
       allow read: if isAdmin();
       allow write: if false;

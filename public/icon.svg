@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="veltroxGrad" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#0b1120"/>
+  <rect x="6" y="6" width="116" height="116" rx="24" stroke="url(#veltroxGrad)" stroke-width="4" opacity="0.5"/>
+  <path d="M32 34L64 96L96 34H80L64 66L48 34H32Z" fill="url(#veltroxGrad)"/>
+</svg>
+

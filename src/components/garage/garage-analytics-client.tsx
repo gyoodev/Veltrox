@@ -238,6 +238,37 @@ export function GarageAnalyticsClient({
         </Card>
       </div>
 
+      {/* Margin & Inventory Health Strip */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card className="p-4">
+          <p className="text-xs text-muted-foreground">{t("partsCostLabel")}</p>
+          <p className="mt-1 font-mono text-xl font-bold text-foreground">
+            {formatCurrency(analytics.totalPartsCostEur, locale, "EUR")}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-muted-foreground">{t("grossProfitLabel")}</p>
+          <p className="mt-1 font-mono text-xl font-bold text-emerald-500">
+            {formatCurrency(analytics.grossProfitEur, locale, "EUR")}{" "}
+            <span className="text-xs font-medium">
+              ({analytics.grossMarginPercent}%)
+            </span>
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-muted-foreground">{t("lowStockLabel")}</p>
+          <p
+            className={`mt-1 font-mono text-xl font-bold ${
+              analytics.lowStockPartsCount > 0
+                ? "text-amber-500"
+                : "text-emerald-500"
+            }`}
+          >
+            {analytics.lowStockPartsCount}
+          </p>
+        </Card>
+      </div>
+
       {/* Revenue Area Chart & Jobs by Status Bar Chart */}
       {analytics.totalJobs === 0 ? (
         <EmptyState

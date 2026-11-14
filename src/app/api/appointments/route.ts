@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validateAppointmentSlotAvailability } from "@/lib/appointments/availability";
 import { getCurrentAuthContext } from "@/lib/auth/server-auth";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { appointmentRequestSchema } from "@/lib/validators/car-diary";
@@ -51,13 +52,40 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "GARAGE_NOT_AVAILABLE" }, { status: 403 });
   }
 
+  const existingApptsSnap = await admin.adminDb
+    .collection("appointments")
+    .where("garageId", "==", data.garageId)
+    .get();
+  const existingAppts = existingApptsSnap.docs.map(
+    (d) =>
+      d.data() as Pick<
+        Appointment,
+        "scheduledStart" | "scheduledEnd" | "status"
+      >
+  );
+
+  const slotCheck = validateAppointmentSlotAvailability({
+    garage,
+    date: data.preferredDate,
+    time: data.preferredTime,
+    durationMinutes: 60,
+    appointments: existingAppts,
+  });
+
+  if (!slotCheck.ok) {
+    return NextResponse.json(
+      {
+        error: "SLOT_UNAVAILABLE",
+        reason: slotCheck.reason,
+        concurrentBays: slotCheck.concurrentBays,
+      },
+      { status: 409 }
+    );
+  }
+
   const authCtx = await getCurrentAuthContext();
-  const scheduledStartIso = new Date(
-    `${data.preferredDate}T${data.preferredTime}:00`
-  ).toISOString();
-  const scheduledEndIso = new Date(
-    Date.parse(scheduledStartIso) + 60 * 60 * 1000
-  ).toISOString();
+  const scheduledStartIso = slotCheck.scheduledStartIso;
+  const scheduledEndIso = slotCheck.scheduledEndIso;
 
   const docRef = admin.adminDb.collection("appointments").doc();
   const nowIso = new Date().toISOString();

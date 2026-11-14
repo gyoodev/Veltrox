@@ -22,7 +22,8 @@
     "statusRejected": "Rejected",
     "emailVerified": "Verified email",
     "emailUnverified": "Unverified email",
-    "verifyNow": "Verify now"
+    "verifyNow": "Verify now",
+    "upgradeToPro": "Upgrade to Pro"
   },
   "nav": {
     "features": "Features",
@@ -148,7 +149,9 @@
     "garageProF3": "High monthly reminder quota + return conversion analytics",
     "garageProF4": "Revenue dashboards & full CSV data export",
     "ctaOwner": "Start as a car owner",
-    "ctaGarage": "Apply as a garage"
+    "ctaGarage": "Apply as a garage",
+    "cycleMonthly": "Monthly",
+    "cycleAnnual": "Annual"
   },
   "faq": {
     "eyebrow": "Frequently asked questions",
@@ -320,7 +323,8 @@
     "adminPanelBtn": "Admin Control Panel",
     "userPanelBtn": "User Panel",
     "skipToContent": "Skip to main content",
-    "soonBadge": "Phase 5+"
+    "soonBadge": "Phase 5+",
+    "inventoryNav": "Parts Inventory"
   },
   "dashboards": {
     "unverifiedBannerTitle": "Your email address is not verified yet",
@@ -698,7 +702,8 @@
       "saveVinAndCheck": "Save VIN and open check",
       "syncMileageTitle": "Sync odometer reading in Veltrox",
       "syncMileageDesc": "If you confirm a higher genuine mileage from the official inspection records, update it here to keep your maintenance schedule accurate.",
-      "saveNewMileage": "Save updated mileage"
+      "saveNewMileage": "Save updated mileage",
+      "vehicleLimitReached": "You reached the Free plan limit ({limit} vehicles). Upgrade to Driver Pro for unlimited cars."
     },
     "timeline": {
       "tabTitle": "Timeline",
@@ -853,7 +858,8 @@
         "fri": "Friday",
         "sat": "Saturday",
         "sun": "Sunday"
-      }
+      },
+      "slotUnavailableError": "That time slot was just booked or is outside working hours. Please pick another available slot."
     }
   },
   "garageWorkspace": {
@@ -946,7 +952,8 @@
       "switchPlanPro": "Upgrade to Pro (500/mo)",
       "switchPlanFree": "Switch to Free (50/mo)",
       "saveSettings": "Save settings",
-      "savedToast": "Garage settings updated."
+      "savedToast": "Garage settings updated.",
+      "concurrentBaysLabel": "Concurrent Service Bays"
     },
     "workOrders": {
       "pageTitle": "Work Orders",
@@ -1009,7 +1016,52 @@
       "saveDetailsBtn": "Save work order",
       "savedToast": "Work order updated.",
       "deleteOrderBtn": "Delete order",
-      "deleteConfirm": "Permanently delete this work order and its line items?"
+      "deleteConfirm": "Permanently delete this work order and its line items?",
+      "workOrderLimitReached": "Monthly Free plan limit reached ({limit} work orders). Upgrade to Garage Pro in Settings.",
+      "selectInventoryPart": "Select inventory part (or enter custom)",
+      "intakeProtocolBtn": "Intake Protocol PDF",
+      "invoicePdfBtn": "Service Invoice PDF",
+      "laborTotal": "Labor Subtotal",
+      "partsTotal": "Parts Subtotal",
+      "quotePanel": {
+        "title": "Repair Quote (Customer Approval)",
+        "status_none": "No Quote Sent",
+        "status_pending": "Pending Approval",
+        "status_approved": "Approved by Customer",
+        "status_declined": "Declined by Customer",
+        "customerComment": "Customer comment",
+        "notesLabel": "Quote notes",
+        "notesPlaceholder": "Explain recommended repairs and timeframe...",
+        "lineDescPlaceholder": "Quote line item description...",
+        "invalidLineError": "Enter a valid line description, quantity, and price.",
+        "quoteTotal": "Quote Total",
+        "sendBtn": "Send Quote for Approval",
+        "resendBtn": "Update & Resend Quote",
+        "sentToast": "Repair quote sent to customer on the status link."
+      },
+      "opsPanel": {
+        "diagnosticsAndIntakeTitle": "Intake Check-in & OBD-II Diagnostics",
+        "fuelLevelLabel": "Fuel Level at Intake",
+        "fuel_empty": "Empty (E)",
+        "fuel_quarter": "1/4 Tank",
+        "fuel_half": "1/2 Tank",
+        "fuel_three_quarters": "3/4 Tank",
+        "fuel_full": "Full (F)",
+        "intakeConditionLabel": "Visual Condition & Intake Notes",
+        "intakeConditionPlaceholder": "e.g. minor bumper scuffs, spare tire present...",
+        "obdTitle": "OBD-II Trouble Codes (DTC)",
+        "dtcDescPlaceholder": "Fault description...",
+        "sev_info": "Info",
+        "sev_warning": "Warning",
+        "sev_critical": "Critical",
+        "dtcInvalidError": "Enter a valid code (e.g. P0420) and description.",
+        "diagnosticNotesLabel": "Diagnostic Findings & Notes",
+        "diagnosticNotesPlaceholder": "Computer scan results, live-data checks...",
+        "beforePhotosTitle": "Before-Repair Photos",
+        "afterPhotosTitle": "After-Repair Photos",
+        "uploadPhotoBtn": "Upload Photo",
+        "photoUploadedToast": "Photo uploaded — click Save to persist."
+      }
     },
     "customers": {
       "pageTitle": "Customers & Vehicles (Plate Lookup)",
@@ -1050,7 +1102,8 @@
       "openOrderBtn": "Open work order",
       "convertedToast": "Work order created from appointment!",
       "savedToast": "Appointment scheduled.",
-      "emptyDay": "No appointments scheduled for this period."
+      "emptyDay": "No appointments scheduled for this period.",
+      "slotUnavailableError": "This time slot exceeds available service bays or working hours."
     },
     "tyres": {
       "pageTitle": "Tyre Storage Hotel",
@@ -1096,6 +1149,66 @@
       "deletedToast": "Staff account removed.",
       "emptyTitle": "No staff accounts yet",
       "emptyDesc": "Add mechanics so they can log drop-off photos and update work orders from their phones."
+    },
+    "inventory": {
+      "pageTitle": "Parts Inventory & Margins",
+      "pageSubtitle": "Manage spare parts stock, supplier cost prices, and profit margins. Adding a part to a work order deducts stock automatically.",
+      "addPartBtn": "Add Part",
+      "editPartTitle": "Edit Inventory Part",
+      "totalSkus": "Total SKUs",
+      "stockValueCost": "Stock Value (Cost)",
+      "lowStockLabel": "At / Below Minimum",
+      "searchPlaceholder": "Search by SKU, name, brand, or supplier...",
+      "lowStockOnly": "Low stock only ({count})",
+      "emptyTitle": "No inventory parts found",
+      "emptyDesc": "Add filters, oils, brake pads, and spare parts to pick them directly in work orders.",
+      "lowStockBadge": "Low Stock",
+      "supplierLabel": "Supplier",
+      "costLabel": "Cost Price",
+      "sellLabel": "Sell Price",
+      "marginLabel": "Margin",
+      "skuLabel": "SKU / Part #",
+      "brandLabel": "Brand",
+      "partNameLabel": "Part Name",
+      "unitLabel": "Unit (pcs, L)",
+      "stockQtyLabel": "Stock Qty",
+      "minAlertLabel": "Min Alert Qty",
+      "saveError": "Could not save inventory part.",
+      "savedToast": "Inventory part saved.",
+      "deletedToast": "Inventory part deleted."
+    },
+    "print": {
+      "backToOrder": "Back to Work Order",
+      "modeIntake": "Intake Protocol",
+      "modeInvoice": "Service Invoice",
+      "printPdfBtn": "Print / Save PDF",
+      "intakeHeading": "Vehicle Intake Protocol",
+      "invoiceHeading": "Service Invoice / Statement",
+      "dateLabel": "Date",
+      "clientBlock": "Customer",
+      "vehicleBlock": "Vehicle",
+      "walkInClient": "Walk-in Customer",
+      "mileage": "Mileage",
+      "fuelLevel": "Fuel Level",
+      "fuel_empty": "Empty (E)",
+      "fuel_quarter": "1/4",
+      "fuel_half": "1/2",
+      "fuel_three_quarters": "3/4",
+      "fuel_full": "Full (F)",
+      "intakeConditionHeading": "Vehicle Condition at Intake",
+      "noConditionNotes": "No visible defects or special intake notes recorded.",
+      "diagnosticsHeading": "Diagnostics & OBD-II Findings",
+      "photosHeading": "Inspection Photos",
+      "workSummaryHeading": "Work Performed Summary",
+      "colType": "Type",
+      "colDescription": "Description",
+      "colQty": "Qty",
+      "colUnitPrice": "Unit Price",
+      "colTotal": "Total",
+      "noItems": "No line items added to this work order yet.",
+      "advisorSig": "Service Advisor Signature",
+      "customerSig": "Customer Signature",
+      "generatedBy": "Generated via"
     }
   },
   "publicStatus": {
@@ -1117,7 +1230,31 @@
     "photosHeading": "Drop-Off Inspection Photos",
     "callGarageCta": "Call garage",
     "viewGarageProfile": "Garage profile",
-    "privacyFooter": "Protected Veltrox status link — personal names, phone numbers, and internal mechanic notes are hidden under GDPR."
+    "privacyFooter": "Protected Veltrox status link — personal names, phone numbers, and internal mechanic notes are hidden under GDPR.",
+    "diagnosticsHeading": "Diagnostics & OBD-II Codes",
+    "beforePhotosHeading": "Before-Repair Photos",
+    "afterPhotosHeading": "After-Repair Photos",
+    "sev_info": "Info",
+    "sev_warning": "Warning",
+    "sev_critical": "Critical",
+    "quote": {
+      "heading": "Repair Estimate & Quote",
+      "status_none": "None",
+      "status_pending": "Awaiting Your Approval",
+      "status_approved": "Approved",
+      "status_declined": "Declined",
+      "requestedAt": "Requested",
+      "estimatedTotal": "Estimated Total",
+      "commentLabel": "Note for the workshop (optional)",
+      "commentPlaceholder": "Any questions or instructions before repair...",
+      "approveBtn": "Approve Repair Quote",
+      "declineBtn": "Decline Quote",
+      "approvedToast": "Thank you! Your quote approval was sent to the workshop.",
+      "declinedToast": "Your quote decline was sent to the workshop.",
+      "submitError": "Could not submit your decision. Please refresh.",
+      "respondedAt": "Responded",
+      "yourComment": "Your comment"
+    }
   },
   "notifications": {
     "bellAria": "Notifications ({count} unread)",
@@ -1159,7 +1296,10 @@
     "sendReminderBtn": "Send reminder",
     "quotaReachedToast": "Monthly reminder quota reached. Upgrade your plan in Garage Settings.",
     "sendErrorToast": "Could not send reminder. Please try again.",
-    "reminderSentToast": "Return reminder sent for {plate}!"
+    "reminderSentToast": "Return reminder sent for {plate}!",
+    "partsCostLabel": "Parts Cost",
+    "grossProfitLabel": "Gross Profit",
+    "lowStockLabel": "Low-Stock Parts"
   },
   "adminPanel": {
     "overview": {
@@ -1376,6 +1516,55 @@
       "lpg": "Autogas (LPG)",
       "methane": "Methane (CNG)"
     }
+  },
+  "billing": {
+    "driverProTitle": "Veltrox Driver Pro Plan",
+    "driverProSubtitle": "Unlimited vehicles, smart expiry alerts, and complete digital service history.",
+    "garageProTitle": "Garage Pro Subscription",
+    "garageProSubtitle": "Unlimited work orders, parts inventory, profit analytics, and higher SMS/Viber quotas.",
+    "planProBadge": "PRO ACTIVE",
+    "planFreeBadge": "FREE PLAN",
+    "userFreeLimit": "Free plan: up to {limit} vehicles in your personal garage.",
+    "garageFreeLimit": "Free plan: up to {limit} work orders per month.",
+    "monthlyBilling": "Monthly",
+    "annualBilling": "Annual",
+    "monthUnit": "mo",
+    "promoCodeLabel": "Promo Code",
+    "promoCodePlaceholder": "e.g. VELTROX20",
+    "applyPromo": "Apply",
+    "promoAppliedToast": "Promo code {code} applied (-{pct}%).",
+    "promoInvalid": "Invalid or inactive promo code.",
+    "billedAnnually": "Billed annually (discount applied)",
+    "billedMonthly": "Billed monthly (cancel anytime)",
+    "upgradeCta": "Upgrade to Pro",
+    "checkoutError": "Could not initiate billing checkout.",
+    "upgradedToast": "Pro subscription activated!",
+    "downgradedToast": "Reverted to Free plan.",
+    "subscriptionsDisabledNotice": "Subscriptions are currently disabled by platform administration.",
+    "proActiveHeading": "Your Pro subscription is active",
+    "manageBillingPortal": "Manage in Stripe Portal",
+    "switchToFree": "Switch to Free Plan"
+  },
+  "webPush": {
+    "label": "Push Alerts",
+    "enableAction": "Enable",
+    "disableAction": "Disable",
+    "title": "Browser Web Push Notifications",
+    "description": "Receive instant alerts for expiring documents, bookings, and quote approvals.",
+    "vapidPendingBadge": "VAPID Key Pending",
+    "activeBadge": "Enabled",
+    "unsupportedToast": "This browser does not support Web Push notifications.",
+    "notConfiguredToast": "Web Push VAPID public key is not configured on the server.",
+    "permissionDeniedToast": "Notification permission was denied in browser settings.",
+    "subscribeErrorToast": "Failed to subscribe for push notifications.",
+    "enabledToast": "Browser Push notifications enabled.",
+    "disabledToast": "Browser Push notifications disabled."
+  },
+  "appointmentsAvailability": {
+    "slotsHeading": "Available Time Slots",
+    "baysLabel": "service bays",
+    "loading": "Checking real-time bay availability...",
+    "closedDayNotice": "Workshop is closed on the selected date.",
+    "noSlots": "No open slots left for this date and duration."
   }
 }
-

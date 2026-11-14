@@ -8,10 +8,12 @@ import {
   Check,
   Copy,
   ExternalLink,
+  FileText,
   Link2,
   Loader2,
   Lock,
   Plus,
+  Printer,
   Save,
   Sparkles,
   Trash2,
@@ -22,6 +24,10 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { type ChangeEvent, useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+  WorkOrderDiagnosticsPanel,
+  WorkOrderQuotePanel,
+} from "@/components/garage/work-order-operations-panels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -42,10 +48,14 @@ import {
   type AppLocale,
   type AttachmentItem,
   type Customer,
+  type DtcDiagnosticCode,
+  type FuelLevel,
   type Garage,
+  type InventoryPart,
   WORK_ORDER_STATUSES,
   type WorkOrder,
   type WorkOrderItem,
+  type WorkOrderQuoteItem,
   type WorkOrderStatus,
 } from "@/types/domain";
 
@@ -55,6 +65,7 @@ interface WorkOrderDetailClientProps {
   initialItems: WorkOrderItem[];
   customer: Customer | null;
   initialVehicleMatch: LinkedVehicleMatch | null;
+  inventoryParts?: InventoryPart[];
   isManager: boolean;
 }
 
@@ -64,6 +75,7 @@ export function WorkOrderDetailClient({
   initialItems,
   customer,
   initialVehicleMatch,
+  inventoryParts = [],
   isManager,
 }: WorkOrderDetailClientProps) {
   const t = useTranslations("garageWorkspace.workOrders");
@@ -97,8 +109,34 @@ export function WorkOrderDetailClient({
     wo.dropOffPhotos ?? []
   );
 
+  // Operational inspection, diagnostics & quote states
+  const [beforePhotoUrls, setBeforePhotoUrls] = useState<string[]>(
+    wo.beforePhotoUrls ?? []
+  );
+  const [afterPhotoUrls, setAfterPhotoUrls] = useState<string[]>(
+    wo.afterPhotoUrls ?? []
+  );
+  const [intakeFuelLevel, setIntakeFuelLevel] = useState<FuelLevel | null>(
+    wo.intakeFuelLevel ?? null
+  );
+  const [intakeConditionNotes, setIntakeConditionNotes] = useState(
+    wo.intakeConditionNotes ?? ""
+  );
+  const [dtcCodes, setDtcCodes] = useState<DtcDiagnosticCode[]>(
+    wo.dtcCodes ?? []
+  );
+  const [diagnosticNotes, setDiagnosticNotes] = useState(
+    wo.diagnosticNotes ?? ""
+  );
+  const [quoteNotes, setQuoteNotes] = useState(wo.quoteNotes ?? "");
+  const [quoteItems, setQuoteItems] = useState<WorkOrderQuoteItem[]>(
+    wo.quoteItems ?? []
+  );
+  const [sendingQuote, setSendingQuote] = useState(false);
+
   // Line item form state
   const [itemType, setItemType] = useState<"labor" | "part">("labor");
+  const [selectedPartId, setSelectedPartId] = useState<string>("custom");
   const [itemDesc, setItemDesc] = useState("");
   const [itemQty, setItemQty] = useState("1");
   const [itemPrice, setItemPrice] = useState("");
@@ -110,6 +148,15 @@ export function WorkOrderDetailClient({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const quotaInfo = getEffectiveReminderQuota(garage);
+
+  const handleSelectInventoryPart = (partId: string) => {
+    setSelectedPartId(partId);
+    if (partId === "custom") return;
+    const part = inventoryParts.find((p) => p.id === partId);
+    if (!part) return;
+    setItemDesc(part.name);
+    setItemPrice(String(part.sellPrice));
+  };
 
   const copyPublicLink = async () => {
     const url = `${window.location.origin}/status/${wo.publicStatusToken}`;
@@ -158,6 +205,14 @@ export function WorkOrderDetailClient({
           customerSummary,
           internalNotes,
           dropOffPhotos: photos,
+          beforePhotoUrls,
+          afterPhotoUrls,
+          intakeFuelLevel,
+          intakeConditionNotes,
+          dtcCodes,
+          diagnosticNotes,
+          quoteNotes,
+          quoteItems,
           nextServiceDate: nextServiceDate.trim() || null,
           nextServiceMileageKm:
             nextServiceMileageKm !== null &&
@@ -190,6 +245,38 @@ export function WorkOrderDetailClient({
     }
   };
 
+  const handleSendQuote = async () => {
+    if (quoteItems.length === 0) return;
+    setSendingQuote(true);
+    try {
+      const res = await fetch(`/api/garage/work-orders/${wo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quoteStatus: "pending",
+          quoteNotes,
+          quoteItems,
+        }),
+      });
+
+      if (!res.ok) {
+        toast.error("Could not send repair quote.");
+        return;
+      }
+
+      const json = (await res.json()) as {
+        workOrder: WorkOrder;
+        garage: Garage;
+      };
+      setWo(json.workOrder);
+      setGarage(json.garage);
+      toast.success(t("quotePanel.sentToast"));
+      router.refresh();
+    } finally {
+      setSendingQuote(false);
+    }
+  };
+
   const handleAddItem = async () => {
     const qty = Number(itemQty);
     const price = Number(itemPrice);
@@ -200,6 +287,11 @@ export function WorkOrderDetailClient({
 
     setAddingItem(true);
     try {
+      const selectedPart =
+        itemType === "part" && selectedPartId !== "custom"
+          ? inventoryParts.find((p) => p.id === selectedPartId)
+          : undefined;
+
       const res = await fetch(`/api/garage/work-orders/${wo.id}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -208,6 +300,13 @@ export function WorkOrderDetailClient({
           description: itemDesc.trim(),
           quantity: qty,
           unitPrice: price,
+          ...(selectedPart
+            ? {
+                inventoryPartId: selectedPart.id,
+                sku: selectedPart.sku,
+                costPrice: selectedPart.costPrice,
+              }
+            : {}),
         }),
       });
 
@@ -222,6 +321,7 @@ export function WorkOrderDetailClient({
       };
       setWo(json.workOrder);
       setItems(json.items);
+      setSelectedPartId("custom");
       setItemDesc("");
       setItemQty("1");
       setItemPrice("");
@@ -383,6 +483,24 @@ export function WorkOrderDetailClient({
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link
+              href={`/garage/work-orders/${wo.id}/print?doc=intake`}
+              target="_blank"
+            >
+              <FileText className="h-3.5 w-3.5 text-primary" />
+              {t("intakeProtocolBtn")}
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link
+              href={`/garage/work-orders/${wo.id}/print?doc=invoice`}
+              target="_blank"
+            >
+              <Printer className="h-3.5 w-3.5 text-primary" />
+              {t("invoicePdfBtn")}
+            </Link>
+          </Button>
           {isManager ? (
             <Button
               type="button"
@@ -521,12 +639,40 @@ export function WorkOrderDetailClient({
           {t("lineItemsTitle")}
         </h2>
 
+        {/* Optional Inventory Part Auto-Fill (when adding a Part) */}
+        {itemType === "part" && inventoryParts.length > 0 ? (
+          <div className="sm:max-w-md">
+            <Select
+              value={selectedPartId}
+              onValueChange={handleSelectInventoryPart}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("selectInventoryPart")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">
+                  {t("selectInventoryPart")}
+                </SelectItem>
+                {inventoryParts.map((part) => (
+                  <SelectItem key={part.id} value={part.id}>
+                    {part.name} ({part.sku}) — {part.stockQty} {part.unit}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+
         {/* Add Line Item Row */}
         <div className="grid gap-2.5 sm:grid-cols-12">
           <div className="sm:col-span-2">
             <Select
               value={itemType}
-              onValueChange={(v) => setItemType(v as "labor" | "part")}
+              onValueChange={(v) => {
+                const next = v as "labor" | "part";
+                setItemType(next);
+                if (next !== "part") setSelectedPartId("custom");
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -605,6 +751,11 @@ export function WorkOrderDetailClient({
                   >
                     {item.type === "labor" ? t("typeLabor") : t("typePart")}
                   </Badge>
+                  {item.sku ? (
+                    <Badge variant="secondary" className="font-mono text-[10px]">
+                      [{item.sku}]
+                    </Badge>
+                  ) : null}
                   <span className="font-medium text-foreground">
                     {item.description}
                   </span>
@@ -816,6 +967,39 @@ export function WorkOrderDetailClient({
               </div>
             ) : null}
           </Card>
+        </div>
+      </div>
+
+      {/* Customer Repair Quote + Intake/OBD-II Diagnostics & Before/After Photos */}
+      <div className="grid gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-5">
+          <WorkOrderQuotePanel
+            currency={wo.currency}
+            quoteStatus={wo.quoteStatus ?? "none"}
+            quoteNotes={quoteNotes}
+            setQuoteNotes={setQuoteNotes}
+            quoteItems={quoteItems}
+            setQuoteItems={setQuoteItems}
+            quoteCustomerComment={wo.quoteCustomerComment ?? null}
+            sendingQuote={sendingQuote}
+            onSendQuote={handleSendQuote}
+          />
+        </div>
+        <div className="lg:col-span-7">
+          <WorkOrderDiagnosticsPanel
+            intakeFuelLevel={intakeFuelLevel}
+            setIntakeFuelLevel={setIntakeFuelLevel}
+            intakeConditionNotes={intakeConditionNotes}
+            setIntakeConditionNotes={setIntakeConditionNotes}
+            dtcCodes={dtcCodes}
+            setDtcCodes={setDtcCodes}
+            diagnosticNotes={diagnosticNotes}
+            setDiagnosticNotes={setDiagnosticNotes}
+            beforePhotoUrls={beforePhotoUrls}
+            setBeforePhotoUrls={setBeforePhotoUrls}
+            afterPhotoUrls={afterPhotoUrls}
+            setAfterPhotoUrls={setAfterPhotoUrls}
+          />
         </div>
       </div>
 

@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { uploadImageToImgBB } from "@/lib/imgbb";
 import { Camera, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -61,6 +62,7 @@ export function VehicleFormDialog({
   const tFuel = useTranslations("carDiary.fuelTypes");
   const tVal = useTranslations("validation");
   const tCommon = useTranslations("common");
+  const router = useRouter();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -203,8 +205,22 @@ export function VehicleFormDialog({
       if (!response.ok) {
         const errJson = (await response.json().catch(() => null)) as {
           error?: string;
+          limit?: number;
+          upgradePath?: string;
           issues?: unknown;
         } | null;
+        if (response.status === 402 && errJson?.error === "FREE_PLAN_LIMIT_REACHED") {
+          toast.error(t("vehicleLimitReached", { limit: errJson.limit ?? 2 }), {
+            action: {
+              label: tCommon("upgradeToPro"),
+              onClick: () => {
+                onOpenChange(false);
+                router.push(errJson.upgradePath || "/app/profile");
+              },
+            },
+          });
+          return;
+        }
         console.error("Save vehicle failed:", errJson);
         toast.error("Неуспешно запазване на автомобила.");
         return;

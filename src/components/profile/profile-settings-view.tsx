@@ -29,6 +29,8 @@ import { type ChangeEvent, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useAuth } from "@/components/providers/auth-provider";
+import { SubscriptionBillingCard } from "@/components/shared/subscription-billing-card";
+import { WebPushToggle } from "@/components/shared/web-push-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,7 +71,11 @@ import {
   type UpdateProfileValues,
   updateProfileSchema,
 } from "@/lib/validators/profile";
-import type { AppLocale, UserProfile } from "@/types/domain";
+import type {
+  AppLocale,
+  PlatformSettingsConfig,
+  UserProfile,
+} from "@/types/domain";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const ALLOWED_AVATAR_TYPES = [
@@ -82,11 +88,13 @@ const ALLOWED_AVATAR_TYPES = [
 interface ProfileSettingsViewProps {
   initialProfile: UserProfile;
   initialFuelPrices?: BulgariaFuelPricesPayload | null;
+  platformSettings?: PlatformSettingsConfig | null;
 }
 
 export function ProfileSettingsView({
   initialProfile,
   initialFuelPrices: _initialFuelPrices = null,
+  platformSettings = null,
 }: ProfileSettingsViewProps) {
   const t = useTranslations("profile");
   const tVal = useTranslations("validation");
@@ -100,6 +108,9 @@ export function ProfileSettingsView({
   );
   const [avatarStoragePath, setAvatarStoragePath] = useState<string | null>(
     initialProfile.avatarStoragePath
+  );
+  const [currentPlan, setCurrentPlan] = useState<"free" | "pro">(
+    initialProfile.plan === "pro" ? "pro" : "free"
   );
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [exportingData, setExportingData] = useState(false);
@@ -636,6 +647,8 @@ export function ProfileSettingsView({
               <Mail className="h-4 w-4 text-primary shrink-0" />
               <span>{t("channelNote")}</span>
             </div>
+
+            <WebPushToggle variant="card" />
           </CardContent>
         </Card>
 
@@ -677,6 +690,21 @@ export function ProfileSettingsView({
       </form>
 
       <Separator />
+
+      {platformSettings && initialProfile.role === "USER" ? (
+        <SubscriptionBillingCard
+          target="user"
+          currentPlan={currentPlan}
+          subscriptionStatus={initialProfile.subscriptionStatus ?? null}
+          billingCycle={initialProfile.billingCycle ?? null}
+          stripeCustomerId={initialProfile.stripeCustomerId ?? null}
+          settings={platformSettings}
+          onPlanChanged={(nextPlan) => {
+            setCurrentPlan(nextPlan);
+            setProfileState({ ...initialProfile, plan: nextPlan });
+          }}
+        />
+      ) : null}
 
       {/* 4. GDPR Data Portability & Irreversible Account Deletion */}
       <Card className="border-border/80 overflow-hidden shadow-sm">

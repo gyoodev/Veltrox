@@ -35,6 +35,7 @@ export async function generateMetadata(): Promise<Metadata> {
       template: "%s | Veltrox",
     },
     description: t("description"),
+    manifest: "/manifest.webmanifest",
     openGraph: {
       type: "website",
       siteName: "Veltrox",

@@ -16,6 +16,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { AppointmentSlotPicker } from "@/components/shared/appointment-slot-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -133,6 +134,14 @@ export function AppointmentRequestDialog({
     });
 
     if (!res.ok) {
+      const errJson = (await res.json().catch(() => null)) as {
+        error?: string;
+        reason?: string;
+      } | null;
+      if (res.status === 409 && errJson?.error === "SLOT_UNAVAILABLE") {
+        toast.error(t("slotUnavailableError"));
+        return;
+      }
       toast.error("Could not send appointment request.");
       return;
     }
@@ -261,6 +270,19 @@ export function AppointmentRequestDialog({
               ) : null}
             </div>
           </div>
+
+          <AppointmentSlotPicker
+            garageId={garage.id}
+            date={form.watch("preferredDate")}
+            durationMinutes={60}
+            selectedTime={form.watch("preferredTime")}
+            onSelectTime={(time) =>
+              form.setValue("preferredTime", time, {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
+          />
 
           <div className="space-y-1.5">
             <Label htmlFor="appt-notes">{t("notes")}</Label>

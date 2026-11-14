@@ -92,6 +92,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     phone: data.phone ?? existing.phone,
     email: data.email ?? existing.email,
     workingHours: data.workingHours ?? existing.workingHours,
+    concurrentBays: data.concurrentBays ?? existing.concurrentBays ?? 2,
     servicesOffered: data.servicesOffered
       ? Array.from(new Set(data.servicesOffered))
       : existing.servicesOffered,

@@ -20,6 +20,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { AppointmentSlotPicker } from "@/components/shared/appointment-slot-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -41,6 +42,7 @@ import {
 import type { AppLocale, Appointment, WorkOrder } from "@/types/domain";
 
 interface AppointmentsCalendarClientProps {
+  garageId: string;
   initialAppointments: Appointment[];
 }
 
@@ -59,6 +61,7 @@ function getMondayOfWeek(isoDate: string): string {
 }
 
 export function AppointmentsCalendarClient({
+  garageId,
   initialAppointments,
 }: AppointmentsCalendarClientProps) {
   const t = useTranslations("garageWorkspace.calendar");
@@ -167,6 +170,13 @@ export function AppointmentsCalendarClient({
       body: JSON.stringify(values),
     });
     if (!res.ok) {
+      const errJson = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      if (res.status === 409 && errJson?.error === "SLOT_UNAVAILABLE") {
+        toast.error(t("slotUnavailableError"));
+        return;
+      }
       toast.error("Failed to create appointment.");
       return;
     }
@@ -478,6 +488,19 @@ export function AppointmentsCalendarClient({
                 />
               </div>
             </div>
+
+            <AppointmentSlotPicker
+              garageId={garageId}
+              date={form.watch("date")}
+              durationMinutes={Number(form.watch("durationMinutes")) || 60}
+              selectedTime={form.watch("time")}
+              onSelectTime={(time) =>
+                form.setValue("time", time, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+            />
 
             <DialogFooter className="gap-2">
               <Button

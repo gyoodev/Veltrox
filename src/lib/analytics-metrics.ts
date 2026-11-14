@@ -4,6 +4,7 @@ import {
   type AppNotification,
   type Customer,
   type Garage,
+  type InventoryPart,
   type Reminder,
   type UserProfile,
   type Vehicle,
@@ -83,6 +84,10 @@ export interface GarageAnalyticsSummary {
   totalRevenueEur: number;
   totalLaborEur: number;
   totalPartsEur: number;
+  totalPartsCostEur: number;
+  grossProfitEur: number;
+  grossMarginPercent: number;
+  lowStockPartsCount: number;
   totalJobs: number;
   completedJobs: number;
   averageTicketEur: number;
@@ -103,6 +108,7 @@ export function computeGarageAnalytics(params: {
   workOrderItems: ReadonlyArray<WorkOrderItem>;
   customers: ReadonlyArray<Customer>;
   reminders: ReadonlyArray<Reminder>;
+  inventoryParts?: ReadonlyArray<InventoryPart>;
   now?: Date;
 }): GarageAnalyticsSummary {
   const now = params.now ?? new Date();
@@ -369,10 +375,39 @@ export function computeGarageAnalytics(params: {
     (a, b) => (a.daysUntilDue ?? 999) - (b.daysUntilDue ?? 999)
   );
 
+  const orderCurrencyMap = new Map<string, "EUR" | "BGN">(
+    params.workOrders.map((wo) => [wo.id, wo.currency])
+  );
+  let totalPartsCostEur = 0;
+  for (const item of params.workOrderItems) {
+    if (typeof item.costPrice === "number" && item.costPrice > 0) {
+      totalPartsCostEur += toAmountEur(
+        item.costPrice * item.quantity,
+        orderCurrencyMap.get(item.workOrderId) ?? "EUR"
+      );
+    }
+  }
+  const roundedRevenueEur = Number(totalRevenueEur.toFixed(2));
+  const roundedPartsCostEur = Number(totalPartsCostEur.toFixed(2));
+  const grossProfitEur = Number(
+    (roundedRevenueEur - roundedPartsCostEur).toFixed(2)
+  );
+  const grossMarginPercent =
+    roundedRevenueEur > 0
+      ? Math.round((grossProfitEur / roundedRevenueEur) * 100)
+      : 0;
+  const lowStockPartsCount = (params.inventoryParts ?? []).filter(
+    (p) => p.stockQty <= p.minStockAlert
+  ).length;
+
   return {
-    totalRevenueEur: Number(totalRevenueEur.toFixed(2)),
+    totalRevenueEur: roundedRevenueEur,
     totalLaborEur: Number(totalLaborEur.toFixed(2)),
     totalPartsEur: Number(totalPartsEur.toFixed(2)),
+    totalPartsCostEur: roundedPartsCostEur,
+    grossProfitEur,
+    grossMarginPercent,
+    lowStockPartsCount,
     totalJobs: params.workOrders.length,
     completedJobs,
     averageTicketEur: Number(averageTicketEur.toFixed(2)),

@@ -35,6 +35,7 @@ export interface NotificationPreferences {
   marketingEmails: boolean;
   /** Ready for Phase 4 SMS/Viber provider abstraction */
   preferredChannel: "email" | "sms" | "viber";
+  pushEnabled?: boolean;
 }
 
 /** Collection: `users/{uid}` */
@@ -56,6 +57,17 @@ export interface UserProfile {
   staffRole?: StaffRole | null;
   /** Personal driver subscription tier (mirrors garage plan semantics; defaults to "free") */
   plan?: "free" | "pro";
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  subscriptionStatus?:
+    | "active"
+    | "trialing"
+    | "past_due"
+    | "canceled"
+    | "inactive"
+    | null;
+  billingCycle?: "monthly" | "annual" | null;
+  planUpdatedAt?: string | null;
   language: AppLocale;
   notificationPreferences: NotificationPreferences;
   suspended: boolean;
@@ -104,8 +116,20 @@ export interface Garage {
   logoUrl: string | null;
   logoStoragePath?: string | null;
   workingHours: WorkingHoursMap;
+  concurrentBays?: number;
   servicesOffered: string[];
   plan: "free" | "pro";
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  subscriptionStatus?:
+    | "active"
+    | "trialing"
+    | "past_due"
+    | "canceled"
+    | "inactive"
+    | null;
+  billingCycle?: "monthly" | "annual" | null;
+  planUpdatedAt?: string | null;
   monthlyReminderQuota: number;
   monthlyRemindersUsed: number;
   quotaResetMonth?: string; // YYYY-MM
@@ -214,6 +238,41 @@ export const WORK_ORDER_STATUSES = [
 ] as const;
 export type WorkOrderStatus = (typeof WORK_ORDER_STATUSES)[number];
 
+export const QUOTE_STATUSES = [
+  "none",
+  "pending",
+  "approved",
+  "declined",
+] as const;
+export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
+
+export interface WorkOrderQuoteItem {
+  id: string;
+  type: "labor" | "part";
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export const DTC_SEVERITIES = ["info", "warning", "critical"] as const;
+export type DtcSeverity = (typeof DTC_SEVERITIES)[number];
+
+export interface DtcDiagnosticCode {
+  code: string;
+  description: string;
+  severity: DtcSeverity;
+}
+
+export const FUEL_LEVELS = [
+  "empty",
+  "quarter",
+  "half",
+  "three_quarters",
+  "full",
+] as const;
+export type FuelLevel = (typeof FUEL_LEVELS)[number];
+
 /** Collection: `workOrders/{workOrderId}` — Garage-owned (`garageId`) */
 export interface WorkOrder {
   id: string;
@@ -231,7 +290,20 @@ export interface WorkOrder {
   status: WorkOrderStatus;
   publicStatusToken: string;
   dropOffPhotoUrls: string[];
+  beforePhotoUrls?: string[];
+  afterPhotoUrls?: string[];
   dropOffPhotos?: AttachmentItem[];
+  intakeFuelLevel?: FuelLevel | null;
+  intakeConditionNotes?: string | null;
+  dtcCodes?: DtcDiagnosticCode[];
+  diagnosticNotes?: string | null;
+  quoteStatus?: QuoteStatus;
+  quoteNotes?: string | null;
+  quoteItems?: WorkOrderQuoteItem[];
+  quoteTotalAmount?: number;
+  quoteRequestedAt?: string | null;
+  quoteRespondedAt?: string | null;
+  quoteCustomerComment?: string | null;
   internalNotes: string | null;
   customerSummary: string | null;
   totalLaborAmount: number;
@@ -279,6 +351,17 @@ export interface WorkOrderPublicStatus {
   totalAmount: number;
   currency: "EUR" | "BGN";
   dropOffPhotoUrls: string[];
+  beforePhotoUrls?: string[];
+  afterPhotoUrls?: string[];
+  dtcCodes?: DtcDiagnosticCode[];
+  diagnosticNotes?: string | null;
+  quoteStatus?: QuoteStatus;
+  quoteNotes?: string | null;
+  quoteItems?: WorkOrderQuoteItem[];
+  quoteTotalAmount?: number;
+  quoteRequestedAt?: string | null;
+  quoteRespondedAt?: string | null;
+  quoteCustomerComment?: string | null;
   nextServiceDate: string | null;
   nextServiceMileageKm: number | null;
   createdAt: string;
@@ -296,7 +379,43 @@ export interface WorkOrderItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  inventoryPartId?: string | null;
+  sku?: string | null;
+  costPrice?: number | null;
   createdAt?: string;
+}
+
+/** Collection: `inventoryParts/{partId}` — Garage-owned (`garageId`) */
+export interface InventoryPart {
+  id: string;
+  garageId: string;
+  sku: string;
+  name: string;
+  brand?: string | null;
+  category?: string | null;
+  supplierName?: string | null;
+  costPrice: number;
+  sellPrice: number;
+  stockQty: number;
+  minStockAlert: number;
+  unit?: string;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Collection: `pushSubscriptions/{subId}` */
+export interface PushSubscriptionRecord {
+  id: string;
+  uid: string;
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  userAgent?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** Collection: `customers/{customerId}` — Garage-owned (`garageId`) */
@@ -455,7 +574,7 @@ export interface AppNotification {
   reminderId?: string | null;
   documentId?: string | null;
   actionUrl?: string | null;
-  channel: "email" | "sms" | "viber" | "in_app";
+  channel: "email" | "sms" | "viber" | "push" | "in_app";
   subject: string;
   body: string;
   status: "queued" | "sent" | "failed" | "read";
@@ -493,6 +612,13 @@ export interface PlatformContentConfig {
   updatedByUid: string | null;
 }
 
+export interface PromoCodeConfig {
+  code: string;
+  discountPct: number;
+  active: boolean;
+  appliesTo?: "all" | "user" | "garage";
+}
+
 /** Collection: `platformConfig/settings` - Global runtime feature flags & controls */
 export interface PlatformSettingsConfig {
   maintenanceMode: boolean;
@@ -505,6 +631,10 @@ export interface PlatformSettingsConfig {
   proPlanPriceEur: number;
   userSubscriptionsEnabled: boolean;
   userProPlanPriceEur: number;
+  freeUserVehicleLimit: number;
+  freeGarageMonthlyWorkOrders: number;
+  annualBillingDiscountPct: number;
+  promoCodes: PromoCodeConfig[];
   systemNotice: string;
   updatedAt: string;
   updatedByUid: string | null;
@@ -519,6 +649,8 @@ export const AUDIT_LOG_ACTIONS = [
   "GARAGE_REJECTED",
   "GARAGE_PLAN_UPDATED",
   "USER_PLAN_UPDATED",
+  "BILLING_CHECKOUT_STARTED",
+  "BILLING_SUBSCRIPTION_UPDATED",
   "GARAGE_STAFF_ADDED",
   "GARAGE_STAFF_REMOVED",
   "USER_SUSPENDED",
@@ -529,6 +661,8 @@ export const AUDIT_LOG_ACTIONS = [
   "DATABASE_SNAPSHOT_EXPORTED",
   "SYSTEM_CACHE_PURGED",
   "REMINDER_ENGINE_RUN",
+  "QUOTE_REQUESTED",
+  "QUOTE_RESPONDED",
   "GDPR_ACCOUNT_DELETED",
   "GDPR_DATA_EXPORTED",
 ] as const;

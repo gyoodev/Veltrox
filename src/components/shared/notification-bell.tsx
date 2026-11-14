@@ -4,6 +4,7 @@ import { Bell, CheckCheck, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
+import { WebPushToggle } from "@/components/shared/web-push-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -177,6 +178,7 @@ export function NotificationBell() {
             })}
           </div>
         )}
+        <WebPushToggle variant="compact" />
       </DropdownMenuContent>
     </DropdownMenu>
   );

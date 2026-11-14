@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { useState } from "react";
 import { OPEN_COOKIE_SETTINGS_EVENT } from "@/components/shared/cookie-consent";
 import { Logo } from "@/components/shared/logo";
 import {
@@ -243,6 +244,7 @@ interface PricingSectionProps {
   currency?: "EUR" | "BGN";
   userProPriceEur?: number;
   garageProPriceEur?: number;
+  annualBillingDiscountPct?: number;
   userSubscriptionsEnabled?: boolean;
   garageSubscriptionsEnabled?: boolean;
 }
@@ -251,13 +253,27 @@ export function PricingSection({
   currency = "EUR",
   userProPriceEur = 4.9,
   garageProPriceEur = 49,
+  annualBillingDiscountPct = 15,
   userSubscriptionsEnabled = true,
   garageSubscriptionsEnabled = true,
 }: PricingSectionProps = {}) {
   const t = useTranslations("pricing");
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">(
+    "monthly"
+  );
+  const discountFactor =
+    billingCycle === "annual"
+      ? Math.max(0.2, 1 - annualBillingDiscountPct / 100)
+      : 1;
   const freePriceLabel = formatPlanPriceLabel(0, currency);
-  const ownerProPriceLabel = formatPlanPriceLabel(userProPriceEur, currency);
-  const garageProPriceLabel = formatPlanPriceLabel(garageProPriceEur, currency);
+  const ownerProPriceLabel = formatPlanPriceLabel(
+    Math.round(userProPriceEur * discountFactor * 100) / 100,
+    currency
+  );
+  const garageProPriceLabel = formatPlanPriceLabel(
+    Math.round(garageProPriceEur * discountFactor * 100) / 100,
+    currency
+  );
 
   return (
     <section
@@ -275,6 +291,38 @@ export function PricingSection({
           <p className="mt-3 text-base leading-relaxed text-muted-foreground">
             {t("subtitle")}
           </p>
+
+          {(userSubscriptionsEnabled || garageSubscriptionsEnabled) && (
+            <div className="mt-6 inline-flex items-center gap-1 rounded-full border border-border bg-background/80 p-1">
+              <button
+                type="button"
+                onClick={() => setBillingCycle("monthly")}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+                  billingCycle === "monthly"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t("cycleMonthly")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingCycle("annual")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
+                  billingCycle === "annual"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>{t("cycleAnnual")}</span>
+                {annualBillingDiscountPct > 0 ? (
+                  <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400">
+                    -{annualBillingDiscountPct}%
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          )}
         </div>
 
         <Tabs defaultValue="owners" className="mx-auto mt-10 max-w-4xl">

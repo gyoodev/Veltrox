@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { validateAppointmentSlotAvailability } from "@/lib/appointments/availability";
 import { resolveGarageApiAuth } from "@/lib/auth/server-auth";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { garageAppointmentFormSchema } from "@/lib/validators/garage";
@@ -62,10 +63,39 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const data = parsed.data;
-  const scheduledStart = new Date(`${data.date}T${data.time}:00`).toISOString();
-  const scheduledEnd = new Date(
-    Date.parse(scheduledStart) + data.durationMinutes * 60 * 1000
-  ).toISOString();
+  const existingApptsSnap = await admin.adminDb
+    .collection("appointments")
+    .where("garageId", "==", auth.garage.id)
+    .get();
+  const existingAppts = existingApptsSnap.docs.map(
+    (d) =>
+      d.data() as Pick<
+        Appointment,
+        "scheduledStart" | "scheduledEnd" | "status"
+      >
+  );
+
+  const slotCheck = validateAppointmentSlotAvailability({
+    garage: auth.garage,
+    date: data.date,
+    time: data.time,
+    durationMinutes: data.durationMinutes,
+    appointments: existingAppts,
+  });
+
+  if (!slotCheck.ok) {
+    return NextResponse.json(
+      {
+        error: "SLOT_UNAVAILABLE",
+        reason: slotCheck.reason,
+        concurrentBays: slotCheck.concurrentBays,
+      },
+      { status: 409 }
+    );
+  }
+
+  const scheduledStart = slotCheck.scheduledStartIso;
+  const scheduledEnd = slotCheck.scheduledEndIso;
 
   const docRef = admin.adminDb.collection("appointments").doc();
   const nowIso = new Date().toISOString();

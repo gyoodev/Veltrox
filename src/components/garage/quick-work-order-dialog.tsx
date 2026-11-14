@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Loader2, Plus, Sparkles, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -62,6 +63,7 @@ export function QuickWorkOrderDialog({
   const tPresets = useTranslations("garageWorkspace.presetServices");
   const tVal = useTranslations("validation");
   const tCommon = useTranslations("common");
+  const router = useRouter();
 
   const [matchedCustomerName, setMatchedCustomerName] = useState<string | null>(
     null
@@ -207,6 +209,23 @@ export function QuickWorkOrderDialog({
     }
 
     if (!res.ok) {
+      const errJson = (await res.json().catch(() => null)) as {
+        error?: string;
+        limit?: number;
+        upgradePath?: string;
+      } | null;
+      if (res.status === 402 && errJson?.error === "FREE_PLAN_LIMIT_REACHED") {
+        toast.error(t("workOrderLimitReached", { limit: errJson.limit ?? 30 }), {
+          action: {
+            label: tCommon("upgradeToPro"),
+            onClick: () => {
+              onOpenChange(false);
+              router.push(errJson.upgradePath || "/garage/settings");
+            },
+          },
+        });
+        return;
+      }
       toast.error("Failed to create work order.");
       return;
     }

@@ -2,6 +2,7 @@ import {
   BellRing,
   Calendar,
   Check,
+  Cpu,
   ExternalLink,
   Gauge,
   MapPin,
@@ -13,6 +14,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
+import { PublicQuoteApprovalCard } from "@/components/public/public-quote-approval-card";
 import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -162,6 +164,58 @@ export default async function PublicWorkOrderStatusPage({
           </p>
         </Card>
 
+        {/* Customer Quote Approval (renders only when a quote exists) */}
+        <PublicQuoteApprovalCard
+          token={projection.token}
+          quoteStatus={projection.quoteStatus ?? "none"}
+          quoteNotes={projection.quoteNotes ?? null}
+          quoteItems={projection.quoteItems ?? []}
+          quoteTotalAmount={projection.quoteTotalAmount ?? 0}
+          quoteRequestedAt={projection.quoteRequestedAt ?? null}
+          quoteRespondedAt={projection.quoteRespondedAt ?? null}
+          quoteCustomerComment={projection.quoteCustomerComment ?? null}
+          currency={projection.currency}
+        />
+
+        {/* Diagnostics & OBD-II Findings */}
+        {(projection.dtcCodes?.length ?? 0) > 0 || projection.diagnosticNotes ? (
+          <Card className="space-y-4 p-6">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <Cpu className="h-4 w-4 text-primary" />
+              {t("diagnosticsHeading")}
+            </h2>
+            {projection.dtcCodes && projection.dtcCodes.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {projection.dtcCodes.map((dtc, idx) => (
+                  <Badge
+                    key={`${dtc.code}-${idx}`}
+                    variant={
+                      dtc.severity === "critical"
+                        ? "destructive"
+                        : dtc.severity === "warning"
+                          ? "warning"
+                          : "secondary"
+                    }
+                    className="gap-1.5 py-1 font-mono"
+                  >
+                    <span>
+                      {dtc.code}: {dtc.description}
+                    </span>
+                    <span className="opacity-75">
+                      ({t(`sev_${dtc.severity}`)})
+                    </span>
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
+            {projection.diagnosticNotes ? (
+              <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+                {projection.diagnosticNotes}
+              </p>
+            ) : null}
+          </Card>
+        ) : null}
+
         {/* Line Items & Total */}
         <Card className="space-y-4 p-6">
           <h2 className="text-base font-semibold text-foreground">
@@ -268,6 +322,60 @@ export default async function PublicWorkOrderStatusPage({
                     src={url}
                     alt="Inspection"
                     className="h-full w-full object-cover"
+                  />
+                </a>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+
+        {/* Before Inspection Photos */}
+        {projection.beforePhotoUrls && projection.beforePhotoUrls.length > 0 ? (
+          <Card className="space-y-4 p-6">
+            <h2 className="text-base font-semibold text-foreground">
+              {t("beforePhotosHeading")}
+            </h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {projection.beforePhotoUrls.map((url, idx) => (
+                <a
+                  key={`${url}-${idx}`}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative aspect-video overflow-hidden rounded-xl border border-border bg-secondary"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt={`${t("beforePhotosHeading")} ${idx + 1}`}
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                </a>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+
+        {/* After Inspection Photos */}
+        {projection.afterPhotoUrls && projection.afterPhotoUrls.length > 0 ? (
+          <Card className="space-y-4 p-6">
+            <h2 className="text-base font-semibold text-foreground">
+              {t("afterPhotosHeading")}
+            </h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {projection.afterPhotoUrls.map((url, idx) => (
+                <a
+                  key={`${url}-${idx}`}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative aspect-video overflow-hidden rounded-xl border border-border bg-secondary"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt={`${t("afterPhotosHeading")} ${idx + 1}`}
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
                   />
                 </a>
               ))}

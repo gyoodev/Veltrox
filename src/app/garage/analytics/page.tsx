@@ -5,14 +5,16 @@ import {
   getGarageWorkOrderItems,
   getGarageWorkspaceBundle,
 } from "@/lib/data/garage";
+import { getGarageInventoryParts } from "@/lib/data/inventory";
 import { getEffectiveReminderQuota } from "@/lib/garage-utils";
 
 export default async function GarageAnalyticsPage() {
   const { garage } = await requireOnboardedGarage();
 
-  const [bundle, workOrderItems] = await Promise.all([
+  const [bundle, workOrderItems, inventoryParts] = await Promise.all([
     getGarageWorkspaceBundle(garage.id),
     getGarageWorkOrderItems(garage.id),
+    getGarageInventoryParts(garage.id),
   ]);
 
   const analytics = computeGarageAnalytics({
@@ -20,6 +22,7 @@ export default async function GarageAnalyticsPage() {
     workOrderItems,
     customers: bundle.customers,
     reminders: bundle.reminders,
+    inventoryParts,
   });
 
   const quota = getEffectiveReminderQuota(garage);

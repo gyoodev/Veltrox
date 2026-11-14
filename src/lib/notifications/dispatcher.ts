@@ -3,20 +3,21 @@ import "server-only";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { getEffectiveReminderQuota } from "@/lib/garage-utils";
 import { EmailNotificationProvider } from "@/lib/notifications/email-provider";
-import { MockSmsNotificationProvider } from "@/lib/notifications/sms-provider";
+import { sendWebPushToUser } from "@/lib/notifications/push-provider";
+import { SmsNotificationProvider } from "@/lib/notifications/sms-provider";
 import type {
   NotificationChannel,
   NotificationProvider,
   OutboundMessagePayload,
   ProviderDeliveryResult,
 } from "@/lib/notifications/types";
-import { MockViberNotificationProvider } from "@/lib/notifications/viber-provider";
+import { ViberNotificationProvider } from "@/lib/notifications/viber-provider";
 import type { AppNotification, Garage } from "@/types/domain";
 
 const PROVIDERS: Record<NotificationChannel, NotificationProvider> = {
   email: new EmailNotificationProvider(),
-  sms: new MockSmsNotificationProvider(),
-  viber: new MockViberNotificationProvider(),
+  sms: new SmsNotificationProvider(),
+  viber: new ViberNotificationProvider(),
 };
 
 export interface DispatchNotificationInput {
@@ -115,6 +116,17 @@ export async function dispatchMultiChannelNotification(
     };
     await inAppRef.set(inAppDoc);
     inAppNotificationId = inAppRef.id;
+
+    if (input.ownerId) {
+      await sendWebPushToUser({
+        uid: input.ownerId,
+        title: input.payload.subject,
+        body: input.payload.textBody,
+        actionUrl: input.payload.actionUrl,
+      }).catch((err) => {
+        console.warn("Web Push delivery failed:", err);
+      });
+    }
   }
 
   // 3. Dispatch across outbound channels (Email live/simulated, SMS mock, Viber mock)

@@ -9,11 +9,14 @@ import {
   Download,
   Globe,
   Loader2,
+  Plus,
   RefreshCw,
   Save,
   ShieldAlert,
   Sliders,
   Sparkles,
+  Tag,
+  Trash2,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -39,10 +42,19 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { PlatformSettingsConfig } from "@/types/domain";
+import type { PlatformSettingsConfig, PromoCodeConfig } from "@/types/domain";
+
+interface IntegrationStatus {
+  stripe: boolean;
+  email: boolean;
+  sms: boolean;
+  viber: boolean;
+  webPush: boolean;
+}
 
 interface PlatformSettingsClientProps {
   initialSettings: PlatformSettingsConfig;
+  integrationStatus?: IntegrationStatus;
 }
 
 const BGN_PER_EUR = 1.95583;
@@ -57,6 +69,7 @@ function parsePriceInput(raw: string, fallback: number): number {
 
 export function PlatformSettingsClient({
   initialSettings,
+  integrationStatus,
 }: PlatformSettingsClientProps) {
   const [settings, setSettings] = useState<PlatformSettingsConfig>(initialSettings);
   const [proPriceDraft, setProPriceDraft] = useState<string>(
@@ -65,6 +78,11 @@ export function PlatformSettingsClient({
   const [userProPriceDraft, setUserProPriceDraft] = useState<string>(
     String(initialSettings.userProPlanPriceEur)
   );
+  const [newPromoCode, setNewPromoCode] = useState("");
+  const [newPromoDiscountPct, setNewPromoDiscountPct] = useState("20");
+  const [newPromoTarget, setNewPromoTarget] = useState<
+    "all" | "user" | "garage"
+  >("all");
   const [saving, setSaving] = useState(false);
   const [testingApis, setTestingApis] = useState(false);
   const [apiStatuses, setApiStatuses] = useState<{
@@ -543,6 +561,201 @@ export function PlatformSettingsClient({
                 </div>
               </div>
 
+              {/* Free Tier Limits & Annual Discount */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="free-user-vehicles">
+                    Лимит коли (Шофьор Free)
+                  </Label>
+                  <Input
+                    id="free-user-vehicles"
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={settings.freeUserVehicleLimit}
+                    onChange={(e) => {
+                      const val = Number.parseInt(e.target.value, 10);
+                      if (Number.isFinite(val) && val >= 1) {
+                        setSettings((prev) => ({
+                          ...prev,
+                          freeUserVehicleLimit: val,
+                        }));
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="free-garage-wo">
+                    Поръчки/мес. (Сервиз Free)
+                  </Label>
+                  <Input
+                    id="free-garage-wo"
+                    type="number"
+                    min={1}
+                    max={100000}
+                    value={settings.freeGarageMonthlyWorkOrders}
+                    onChange={(e) => {
+                      const val = Number.parseInt(e.target.value, 10);
+                      if (Number.isFinite(val) && val >= 1) {
+                        setSettings((prev) => ({
+                          ...prev,
+                          freeGarageMonthlyWorkOrders: val,
+                        }));
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="annual-discount">
+                    Отстъпка за годишен план (%)
+                  </Label>
+                  <Input
+                    id="annual-discount"
+                    type="number"
+                    min={0}
+                    max={80}
+                    value={settings.annualBillingDiscountPct}
+                    onChange={(e) => {
+                      const val = Number.parseFloat(e.target.value);
+                      if (Number.isFinite(val) && val >= 0) {
+                        setSettings((prev) => ({
+                          ...prev,
+                          annualBillingDiscountPct: Math.min(80, val),
+                        }));
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Promo Codes Builder */}
+              <div className="rounded-xl border border-border/60 bg-secondary/20 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold text-foreground">
+                    Промо кодове за отстъпка
+                  </span>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <Input
+                    value={newPromoCode}
+                    onChange={(e) => setNewPromoCode(e.target.value.toUpperCase())}
+                    placeholder="НАПР. VELTROX20"
+                    className="font-mono uppercase"
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={newPromoDiscountPct}
+                    onChange={(e) => setNewPromoDiscountPct(e.target.value)}
+                    placeholder="% отстъпка"
+                  />
+                  <Select
+                    value={newPromoTarget}
+                    onValueChange={(v) =>
+                      setNewPromoTarget(v as "all" | "user" | "garage")
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Всички планове</SelectItem>
+                      <SelectItem value="user">Driver Pro</SelectItem>
+                      <SelectItem value="garage">Garage Pro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      const clean = newPromoCode
+                        .trim()
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9_-]/g, "");
+                      const pct = Number.parseFloat(newPromoDiscountPct);
+                      if (clean.length < 2 || !Number.isFinite(pct) || pct < 1) {
+                        toast.error("Въведете валиден промо код и % (1-90).");
+                        return;
+                      }
+                      const nextCode: PromoCodeConfig = {
+                        code: clean,
+                        discountPct: Math.min(90, Math.round(pct * 100) / 100),
+                        active: true,
+                        appliesTo: newPromoTarget,
+                      };
+                      setSettings((prev) => ({
+                        ...prev,
+                        promoCodes: [
+                          ...(prev.promoCodes ?? []).filter(
+                            (p) => p.code !== clean
+                          ),
+                          nextCode,
+                        ],
+                      }));
+                      setNewPromoCode("");
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Добави код
+                  </Button>
+                </div>
+
+                {(settings.promoCodes ?? []).length > 0 ? (
+                  <div className="space-y-1.5 pt-1">
+                    {settings.promoCodes.map((promo) => (
+                      <div
+                        key={promo.code}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-foreground">
+                            {promo.code}
+                          </span>
+                          <Badge variant="violet">-{promo.discountPct}%</Badge>
+                          <Badge variant="outline">
+                            {promo.appliesTo ?? "all"}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={promo.active}
+                            onCheckedChange={(checked) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                promoCodes: prev.promoCodes.map((p) =>
+                                  p.code === promo.code
+                                    ? { ...p, active: checked }
+                                    : p
+                                ),
+                              }))
+                            }
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                promoCodes: prev.promoCodes.filter(
+                                  (p) => p.code !== promo.code
+                                ),
+                              }))
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
               <div className="flex justify-end pt-1">
                 <Button
                   type="button"
@@ -687,6 +900,44 @@ export function PlatformSettingsClient({
               </div>
             </CardContent>
           </Card>
+
+          {/* Messaging & Billing Providers Live / Simulated Status */}
+          {integrationStatus ? (
+            <Card className="border-border/70 bg-card/60">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold">
+                  Комуникации и плащания (Live / Sim)
+                </CardTitle>
+                <CardDescription>
+                  Автоматично превключване към реален API режим при зададени ключове в средата.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 font-mono text-xs">
+                {[
+                  { label: "Stripe Billing", live: integrationStatus.stripe },
+                  { label: "Resend Email", live: integrationStatus.email },
+                  { label: "Twilio SMS", live: integrationStatus.sms },
+                  { label: "Viber Business", live: integrationStatus.viber },
+                  { label: "Web Push (VAPID)", live: integrationStatus.webPush },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-secondary/30 p-2.5"
+                  >
+                    <span className="font-sans font-semibold text-foreground">
+                      {item.label}
+                    </span>
+                    <Badge
+                      variant={item.live ? "success" : "secondary"}
+                      className="text-[10px]"
+                    >
+                      {item.live ? "LIVE" : "SIMULATED"}
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
 
           {/* Configuration Metadata */}
           <div className="rounded-xl border border-border/50 bg-secondary/20 p-3 text-[11px] text-muted-foreground font-mono space-y-1">

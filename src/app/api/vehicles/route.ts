@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentAuthContext } from "@/lib/auth/server-auth";
+import { getPlatformSettings } from "@/lib/data/platform-settings";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { vehicleFormSchema } from "@/lib/validators/car-diary";
 import { normalizeLicensePlate } from "@/lib/validators/entities";
@@ -64,6 +65,28 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const data = parsed.data;
   const uid = ctx.session.uid;
+
+  if ((ctx.profile.plan ?? "free") !== "pro" && ctx.profile.role !== "ADMIN") {
+    const settings = await getPlatformSettings();
+    const existingSnap = await admin.adminDb
+      .collection("vehicles")
+      .where("ownerId", "==", uid)
+      .select("id")
+      .get();
+
+    if (existingSnap.size >= settings.freeUserVehicleLimit) {
+      return NextResponse.json(
+        {
+          error: "FREE_PLAN_LIMIT_REACHED",
+          limit: settings.freeUserVehicleLimit,
+          currentCount: existingSnap.size,
+          upgradePath: "/app/profile",
+          subscriptionsEnabled: settings.userSubscriptionsEnabled,
+        },
+        { status: 402 }
+      );
+    }
+  }
 
   if (
     data.photoStoragePath &&
