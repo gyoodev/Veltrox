@@ -107,6 +107,10 @@ Veltrox/
 │   ├── .env.example               # Functions runtime env template (RESEND_API_KEY, etc.)
 │   ├── package.json
 │   └── tsconfig.json
+├── public/
+│   ├── icon.svg                   # PWA & Web Push notification vector badge
+│   ├── manifest.webmanifest       # Web App Manifest for installability & push registration
+│   └── sw.js                      # Service Worker handling Web Push payloads & notification clicks
 ├── scripts/
 │   ├── approve-garage.ts          # CLI: Approve a pending GARAGE_OWNER + sync claims & audit log
 │   ├── import-service-account.mjs # CLI: Safely import Firebase Admin JSON into Git-ignored .env.local
@@ -115,29 +119,32 @@ Veltrox/
 │   ├── app/
 │   │   ├── (auth)/                # /login, /register, /forgot-password, /verify-email
 │   │   ├── (legal)/               # /privacy, /terms (GDPR & platform terms)
-│   │   ├── admin/                 # ADMIN governance (/approvals, /users, /analytics, /content, /audit-logs)
-│   │   ├── api/                   # REST Route Handlers (auth, user, diary, garage, admin, notifications, cron)
+│   │   ├── admin/                 # ADMIN governance (/approvals, /users, /settings, /analytics, /content, /audit-logs)
+│   │   ├── api/                   # REST Route Handlers (auth, billing, push, appointments, garage, admin, notifications, cron)
 │   │   ├── app/                   # Car Owner workspace (/app/cars, /expenses, /reminders, /documents)
-│   │   ├── garage/                # Garage & Staff workspace (/work-orders, /customers, /tyres, /analytics...)
+│   │   ├── garage/                # Garage & Staff workspace (/work-orders, /inventory, /customers, /tyres, /analytics...)
 │   │   ├── garages/               # Public SEO garage directory (/garages, /garages/[slug])
-│   │   └── status/[token]/        # Public zero-login repair status tracker (noindex, whitelisted fields)
+│   │   └── status/[token]/        # Public zero-login repair status tracker & quote approval (noindex, whitelisted fields)
 │   ├── components/
-│   │   ├── admin/                 # Approvals queue, user governance, analytics, CMS editor, audit viewer
+│   │   ├── admin/                 # Approvals queue, user governance, pricing/promo settings, analytics, CMS editor, audit viewer
 │   │   ├── car-diary/             # Vehicle cards, timeline dialogs, Recharts analytics, service book print
-│   │   ├── garage/                # Onboarding wizard, quick work order modal, Kanban/board, analytics, Tyre Hotel
+│   │   ├── garage/                # Onboarding wizard, work order ops/quote/print, inventory CRUD, analytics, Tyre Hotel
 │   │   ├── layout/                # Role-aware DashboardShell & mobile navigation
-│   │   ├── marketing/             # Landing page sections, navbar, interactive Demo-labeled preview
-│   │   ├── profile/               # Profile settings, notification prefs, GDPR export & account deletion
-│   │   ├── shared/                # Logo, NotificationBell, AnnouncementBanner, BG/EN switcher, GDPR consent
+│   │   ├── marketing/             # Landing page sections, monthly/annual pricing toggle, Demo-labeled preview
+│   │   ├── profile/               # Profile settings, Fuel prices widget, Web Push toggle, Driver Pro billing, GDPR purge
+│   │   ├── public/                # Public quote approval interactive card (/status/[token])
+│   │   ├── shared/                # Logo, NotificationBell, SubscriptionBillingCard, WebPushToggle, AppointmentSlotPicker
 │   │   └── ui/                    # Reusable shadcn/ui & Radix primitives
 │   ├── i18n/                      # next-intl locale config & server request resolver
 │   ├── lib/
+│   │   ├── appointments/          # Europe/Sofia bay-capacity slot generator & conflict validator (availability.ts)
 │   │   ├── auth/                  # Edge HMAC session signer (edge-session.ts) & Admin guards (server-auth.ts)
-│   │   ├── data/                  # Server Firestore loaders (user-diary.ts, garage.ts, admin.ts, platform-cms.ts)
+│   │   ├── billing/               # Billing quote/promo/annual calculator & Stripe REST/HMAC helpers
+│   │   ├── data/                  # Server Firestore loaders (user-diary.ts, garage.ts, inventory.ts, admin.ts, platform-settings.ts)
 │   │   ├── firebase/              # Client SDK (consent-gated analytics) & Admin SDK singleton
-│   │   ├── notifications/         # Provider abstraction (Email live + SMS/Viber mocks), templates, sweep engine
-│   │   ├── validators/            # Shared Zod schemas (auth, profile, car-diary, garage, admin, entities)
-│   │   ├── analytics-metrics.ts   # Garage revenue/retention/conversion & Admin platform analytics engine
+│   │   ├── notifications/         # Multi-channel providers (Resend Email, Twilio SMS REST, Viber Business REST, Web Push VAPID)
+│   │   ├── validators/            # Shared Zod schemas (auth, profile, car-diary, garage, inventory, admin)
+│   │   ├── analytics-metrics.ts   # Garage revenue/gross-margin/retention & Admin platform analytics engine
 │   │   ├── diary-metrics.ts       # Fuel L/100km, cost/km, category totals & reminder urgency helpers
 │   │   └── garage-utils.ts        # Plate normalization/masking, slugifier, token generator, CSV serializer
 │   ├── messages/                  # bg.json (default) & en.json translation catalogs
@@ -162,21 +169,23 @@ Veltrox/
 ### Firestore Collections
 | Collection | Purpose |
 | :--- | :--- |
-| `users` | Account profile, role (`USER`, `GARAGE_OWNER`, `ADMIN`), `garageStatus`, notification preferences |
-| `garages` | Public & operational workshop profile, slug, city, working hours, plan (`free`/`pro`), reminder quota |
+| `users` | Account profile, role (`USER`, `GARAGE_OWNER`, `ADMIN`), `garageStatus`, subscription plan/Stripe IDs, notification preferences |
+| `garages` | Public & operational workshop profile, slug, city, working hours, `concurrentBays`, plan (`free`/`pro`), Stripe IDs, reminder quota |
 | `garageStaff` | Workshop staff memberships (`mechanic`, `receptionist`) mapped to `garageId` |
 | `vehicles` | Car owner vehicles, VIN, plate, odometer, fuel type |
-| `diaryEntries` | Maintenance, repair, fuel, inspection, and expense entries (including garage-synced records) |
+| `diaryEntries` | Maintenance, repair, fuel, inspection, and expense entries (including garage-synced records & OBD-II findings) |
 | `documents` | Vehicle & driver document metadata, Storage attachment paths, and expiry dates |
 | `reminders` | Date/mileage reminders created by car owners or scheduled by garages |
 | `customers` | Garage-scoped customer & vehicle plate CRM records with optional linked `vehicleId` |
-| `workOrders` | Workshop repair orders, internal mechanic notes, totals, and status lifecycle |
-| `workOrderItems` | Itemized labor and parts lines associated with a `WorkOrder` |
-| `workOrderPublicStatus` | **GDPR-safe public projection** keyed by unguessable `publicToken` (masked plate, status, line items—no PII) |
+| `workOrders` | Workshop repair orders, intake protocol, OBD-II DTC codes, quote workflow, before/after photos, internal notes, totals |
+| `workOrderItems` | Itemized labor and parts lines associated with a `WorkOrder` (including optional `inventoryPartId`, `sku`, `costPrice`) |
+| `inventoryParts` | Garage spare-parts SKU catalog, supplier cost/sell pricing, stock quantities & low-stock alert thresholds |
+| `workOrderPublicStatus` | **GDPR-safe public projection** keyed by unguessable `publicToken` (masked plate, status, quote approval, DTC findings, photos—no PII) |
 | `appointments` | Workshop calendar bookings and car-owner online appointment requests |
 | `tyreSets` | Seasonal Tyre Hotel sets, rack/shelf locations, tread depth, and storage status |
-| `notifications` | Multi-channel & in-app notification records (`email`, `sms`, `viber`, `in_app`) |
-| `platformConfig` | Public bilingual CMS config (`platformConfig/public` — announcement banner & dynamic FAQs) |
+| `notifications` | Multi-channel & in-app notification records (`email`, `sms`, `viber`, `push`, `in_app`) |
+| `pushSubscriptions` | Per-user browser `PushManager` subscriptions for VAPID Web Push delivery |
+| `platformConfig` | Platform settings (`platformConfig/settings` — pricing, quotas, promos) & bilingual CMS (`platformConfig/public`) |
 | `auditLogs` | Append-only, immutable security and administrative audit records |
 
 ---
@@ -286,6 +295,9 @@ All user-facing copy lives in `src/messages/bg.json` (Bulgarian default) and `sr
      - `SESSION_SECRET` = strong 32+ byte random secret
      - `CRON_SECRET` = random secret (`>= 16` chars) used to authenticate Vercel Cron requests
      - `RESEND_API_KEY` & `NOTIFICATION_FROM_EMAIL` = live transactional email delivery credentials
+     - *(Optional Billing)* `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (routes live Stripe Checkout, Customer Portal & Webhook events to `/api/billing/webhook`)
+     - *(Optional SMS/Viber)* `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (or `TWILIO_MESSAGING_SERVICE_SID`), `VIBER_AUTH_TOKEN`
+     - *(Optional Web Push)* `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (generate via `npx web-push generate-vapid-keys`)
 3. **Authorize Production Domain in Firebase**:
    - Go to **Firebase Console → Authentication → Settings → Authorized domains** and add your Vercel production domain.
 
