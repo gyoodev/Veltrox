@@ -278,6 +278,20 @@ export function WorkspaceSubscriptionView({
                   </div>
                 ) : null}
               </div>
+
+              <Button
+                asChild
+                variant={isPro ? "gradient" : "outline"}
+                size="sm"
+                className="w-full gap-2"
+              >
+                <Link
+                  href={target === "user" ? "/app/pro-tools" : "/garage/pro-tools"}
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  {t("openProToolsCta")}
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>

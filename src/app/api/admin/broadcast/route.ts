@@ -37,7 +37,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
-    const { target, specificEmail, subject, body, actionUrl } = parsed.data;
+    const { target, specificEmail, subject, body, actionUrl, priority } =
+      parsed.data;
 
     let targetUids: string[] = [];
 
@@ -98,6 +99,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           channel: "in_app",
           subject,
           body,
+          priority,
           actionUrl: actionUrl || null,
           status: "sent",
           readAt: null,

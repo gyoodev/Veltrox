@@ -27,6 +27,7 @@ import {
   Settings,
   Shield,
   Sliders,
+  Sparkles,
   UserCircle2,
   Users,
   UserSquare2,
@@ -205,6 +206,13 @@ export function DashboardShell({
     if (!isStaffMember) {
       items.push(
         {
+          href: "/garage/pro-tools",
+          label: tShell("proToolsNav"),
+          icon: Sparkles,
+          badge: "PRO",
+          mobilePrimary: false,
+        },
+        {
           href: "/garage/staff",
           label: tShell("staffNav"),
           icon: UserSquare2,
@@ -270,6 +278,13 @@ export function DashboardShell({
       href: "/app/garages",
       label: tShell("findGarageNav"),
       icon: Compass,
+      mobilePrimary: false,
+    },
+    {
+      href: "/app/pro-tools",
+      label: tShell("proToolsNav"),
+      icon: Sparkles,
+      badge: "PRO",
       mobilePrimary: false,
     },
     {
@@ -462,14 +477,29 @@ export function DashboardShell({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all",
+                  "flex min-h-11 items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all",
                   isActive
                     ? "bg-veltrox-gradient text-white shadow-glow-blue"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                 )}
               >
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                <span>{item.label}</span>
+                <span className="flex min-w-0 items-center gap-3">
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{item.label}</span>
+                </span>
+                {item.badge ? (
+                  <Badge
+                    variant="warning"
+                    className={cn(
+                      "px-1.5 py-0 text-[10px] font-bold shrink-0",
+                      isActive
+                        ? "border-white/40 bg-white/20 text-white"
+                        : "border-amber-500/40 bg-amber-500/15 text-amber-400"
+                    )}
+                  >
+                    {item.badge}
+                  </Badge>
+                ) : null}
               </Link>
             );
           })}
@@ -904,14 +934,29 @@ export function DashboardShell({
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
-                      "flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all",
+                      "flex min-h-11 items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all",
                       isActive
                         ? "bg-veltrox-gradient text-white shadow-glow-blue"
                         : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                     )}
                   >
-                    <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{item.label}</span>
+                    <span className="flex min-w-0 items-center gap-3">
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    {item.badge ? (
+                      <Badge
+                        variant="warning"
+                        className={cn(
+                          "px-1.5 py-0 text-[10px] font-bold shrink-0",
+                          isActive
+                            ? "border-white/40 bg-white/20 text-white"
+                            : "border-amber-500/40 bg-amber-500/15 text-amber-400"
+                        )}
+                      >
+                        {item.badge}
+                      </Badge>
+                    ) : null}
                   </Link>
                 );
               })}

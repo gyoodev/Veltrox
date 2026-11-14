@@ -577,6 +577,7 @@ export interface AppNotification {
   channel: "email" | "sms" | "viber" | "push" | "in_app";
   subject: string;
   body: string;
+  priority?: "normal" | "important" | "critical" | null;
   status: "queued" | "sent" | "failed" | "read";
   deliveryKey?: string | null;
   provider?: string | null;

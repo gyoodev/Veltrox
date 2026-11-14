@@ -113,12 +113,25 @@ export function BroadcastComposerClient({
         channel: "in_app",
         subject: subject.trim(),
         body: body.trim(),
+        priority,
         actionUrl: actionUrl.trim() || null,
         status: "sent",
         readAt: null,
         createdAt: new Date().toISOString(),
       };
       setHistory((prev) => [newMockItem, ...prev]);
+
+      // Notify any mounted NotificationBell instances immediately (same tab + open tabs)
+      try {
+        window.dispatchEvent(new CustomEvent("veltrox:notifications-refresh"));
+        if (typeof BroadcastChannel !== "undefined") {
+          const ch = new BroadcastChannel("veltrox-notifications");
+          ch.postMessage({ type: "refresh" });
+          ch.close();
+        }
+      } catch {
+        // Ignore BroadcastChannel unavailability in restricted contexts
+      }
 
       // Reset form
       setSubject("");
