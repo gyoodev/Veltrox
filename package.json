@@ -27,6 +27,7 @@
     "mobile:android:all": "node scripts/build-android.mjs all"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^7.5.0",
     "@capacitor/android": "^7.6.0",
     "@capacitor/app": "^7.0.0",
     "@capacitor/browser": "^7.0.0",

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signInWithEmailAndPassword, signInWithPopup } from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { AlertCircle, Loader2, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFirebaseClient } from "@/lib/firebase/client";
+import { signInWithGooglePlatform } from "@/lib/firebase/native-auth";
 import { type LoginFormValues, loginSchema } from "@/lib/validators/auth";
 
 function mapFirebaseErrorCode(
@@ -28,6 +29,14 @@ function mapFirebaseErrorCode(
   }
   if (message === "ACCOUNT_SUSPENDED") {
     return "accountSuspended";
+  }
+  const lowMsg = (message ?? "").toLowerCase();
+  if (
+    lowMsg.includes("cancel") ||
+    lowMsg.includes("closed") ||
+    lowMsg.includes("dismissed")
+  ) {
+    return "popupClosed";
   }
   switch (code) {
     case "auth/invalid-credential":
@@ -122,10 +131,7 @@ function LoginFormContent() {
 
     setGoogleLoading(true);
     try {
-      const credential = await signInWithPopup(
-        client.auth,
-        client.googleProvider
-      );
+      const credential = await signInWithGooglePlatform(client);
       const { redirectTo } = await syncServerSession(credential.user);
       window.location.href = resolveSafeRedirect(redirectTo);
     } catch (err: unknown) {

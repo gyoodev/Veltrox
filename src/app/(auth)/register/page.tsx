@@ -4,7 +4,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
-  signInWithPopup,
   updateProfile,
 } from "firebase/auth";
 import {
@@ -29,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getFirebaseClient } from "@/lib/firebase/client";
+import { signInWithGooglePlatform } from "@/lib/firebase/native-auth";
 import { cn } from "@/lib/utils";
 import { type RegisterFormValues, registerSchema } from "@/lib/validators/auth";
 import type { RegistrableRole } from "@/types/domain";
@@ -125,10 +125,7 @@ function RegisterFormContent() {
 
     setGoogleLoading(true);
     try {
-      const credential = await signInWithPopup(
-        client.auth,
-        client.googleProvider
-      );
+      const credential = await signInWithGooglePlatform(client);
       const { redirectTo } = await syncServerSession(credential.user, {
         requestedRole: selectedRole,
         forceRefresh: true,
@@ -137,7 +134,14 @@ function RegisterFormContent() {
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
       const message = (err as { message?: string })?.message;
-      if (message === "FIREBASE_ADMIN_NOT_CONFIGURED") {
+      const lowMsg = (message ?? "").toLowerCase();
+      if (
+        lowMsg.includes("cancel") ||
+        lowMsg.includes("closed") ||
+        lowMsg.includes("dismissed")
+      ) {
+        toast.error(t("errors.popupClosed"));
+      } else if (message === "FIREBASE_ADMIN_NOT_CONFIGURED") {
         toast.error(t("errors.adminNotConfigured"));
       } else if (code === "auth/popup-closed-by-user") {
         toast.error(t("errors.popupClosed"));
