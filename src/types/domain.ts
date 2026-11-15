@@ -192,7 +192,43 @@ export interface Vehicle {
   linkedGarageIds: string[];
   linkedGarageNames?: Record<string, string>;
   pendingGarageLinks?: PendingGarageLink[];
+  publicPassToken?: string | null;
+  publicPassEnabled?: boolean;
+  publicPassIncludeAmounts?: boolean;
   createdAt: string;
+  updatedAt: string;
+}
+
+export interface VehiclePublicPass {
+  token: string;
+  vehicleId: string;
+  make: string;
+  model: string;
+  year: number;
+  fuelType: FuelType;
+  currentMileageKm: number;
+  maskedPlate: string;
+  vinLast6: string | null;
+  includeCosts: boolean;
+  verifiedGarageEntriesCount: number;
+  totalEntriesCount: number;
+  odometerConsistent: boolean;
+  entries: Array<{
+    id: string;
+    date: string;
+    category: DiaryCategory;
+    title: string;
+    mileageKm: number;
+    garageVerified: boolean;
+    garageName: string | null;
+    costAmount: number | null;
+    currency: "EUR" | "BGN" | null;
+  }>;
+  compliance: {
+    validInsurance: boolean;
+    validInspection: boolean;
+    validVignette: boolean;
+  };
   updatedAt: string;
 }
 
@@ -264,6 +300,19 @@ export interface DtcDiagnosticCode {
   severity: DtcSeverity;
 }
 
+export const DVI_STATUSES = ["ok", "attention", "critical"] as const;
+export type DviStatus = (typeof DVI_STATUSES)[number];
+
+export interface DviCheckItem {
+  id: string;
+  label: string;
+  status: DviStatus;
+  note?: string | null;
+  photoUrl?: string | null;
+  estimatedCostEur?: number | null;
+  updatedAt?: string;
+}
+
 export const FUEL_LEVELS = [
   "empty",
   "quarter",
@@ -288,11 +337,14 @@ export interface WorkOrder {
   vehicleLabel: string;
   mileageKm: number | null;
   status: WorkOrderStatus;
+  assignedStaffUid?: string | null;
+  assignedStaffName?: string | null;
   publicStatusToken: string;
   dropOffPhotoUrls: string[];
   beforePhotoUrls?: string[];
   afterPhotoUrls?: string[];
   dropOffPhotos?: AttachmentItem[];
+  dviChecks?: DviCheckItem[];
   intakeFuelLevel?: FuelLevel | null;
   intakeConditionNotes?: string | null;
   dtcCodes?: DtcDiagnosticCode[];
@@ -355,6 +407,7 @@ export interface WorkOrderPublicStatus {
   afterPhotoUrls?: string[];
   dtcCodes?: DtcDiagnosticCode[];
   diagnosticNotes?: string | null;
+  dviChecks?: DviCheckItem[];
   quoteStatus?: QuoteStatus;
   quoteNotes?: string | null;
   quoteItems?: WorkOrderQuoteItem[];

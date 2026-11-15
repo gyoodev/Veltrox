@@ -13,6 +13,7 @@ import type {
   Reminder,
   TyreSet,
   UserProfile,
+  WorkOrder,
 } from "@/types/domain";
 
 export const runtime = "nodejs";
@@ -21,18 +22,21 @@ const winbackSchema = z
   .object({
     customerId: z.string().min(1).max(128).optional(),
     tyreSetId: z.string().min(1).max(128).optional(),
+    workOrderId: z.string().min(1).max(128).optional(),
     campaignType: z.enum([
       "seasonal_check",
       "annual_service",
       "tyre_swap",
       "tyre_replacement",
+      "quote_followup",
+      "seasonal_promo",
       "custom",
     ]),
     customMessage: z.string().trim().max(400).optional(),
     plateNumber: z.string().trim().max(24).optional(),
     vehicleLabel: z.string().trim().max(120).optional(),
   })
-  .refine((v) => Boolean(v.customerId || v.tyreSetId), {
+  .refine((v) => Boolean(v.customerId || v.tyreSetId || v.workOrderId), {
     message: "TARGET_REQUIRED",
   });
 
@@ -70,6 +74,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const {
     customerId,
     tyreSetId,
+    workOrderId,
     campaignType,
     customMessage,
     plateNumber,
@@ -78,6 +83,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   let customer: Customer | null = null;
   let tyreSet: TyreSet | null = null;
+  let workOrder: WorkOrder | null = null;
+
+  if (workOrderId) {
+    const woSnap = await admin.adminDb
+      .collection("workOrders")
+      .doc(workOrderId)
+      .get();
+    if (!woSnap.exists) {
+      return NextResponse.json({ error: "WORK_ORDER_NOT_FOUND" }, { status: 404 });
+    }
+    workOrder = { ...(woSnap.data() as WorkOrder), id: woSnap.id };
+    if (workOrder.garageId !== auth.garage.id) {
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    }
+  }
 
   if (tyreSetId) {
     const tyreSnap = await admin.adminDb
@@ -93,7 +113,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const effectiveCustomerId = customerId ?? tyreSet?.customerId ?? undefined;
+  const effectiveCustomerId =
+    customerId ?? tyreSet?.customerId ?? workOrder?.customerId ?? undefined;
   if (effectiveCustomerId) {
     const custSnap = await admin.adminDb
       .collection("customers")
@@ -110,16 +131,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const recipientName = customer?.fullName ?? tyreSet?.customerName ?? "";
+  const recipientName =
+    customer?.fullName ??
+    workOrder?.customerName ??
+    tyreSet?.customerName ??
+    "";
   if (!recipientName) {
     return NextResponse.json({ error: "CUSTOMER_NOT_FOUND" }, { status: 404 });
   }
 
+  const effectiveOwnerId =
+    customer?.linkedOwnerId ?? workOrder?.linkedOwnerId ?? null;
   let ownerProfile: UserProfile | null = null;
-  if (customer?.linkedOwnerId) {
+  if (effectiveOwnerId) {
     const ownerSnap = await admin.adminDb
       .collection("users")
-      .doc(customer.linkedOwnerId)
+      .doc(effectiveOwnerId)
       .get();
     if (ownerSnap.exists) {
       ownerProfile = ownerSnap.data() as UserProfile;
@@ -128,12 +155,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const locale: AppLocale =
     ownerProfile?.language ?? auth.profile.language ?? "bg";
-  const toEmail = customer?.email || ownerProfile?.email || null;
-  const toPhone = customer?.phone || tyreSet?.customerPhone || ownerProfile?.phone || null;
+  const toEmail =
+    customer?.email || workOrder?.customerEmail || ownerProfile?.email || null;
+  const toPhone =
+    customer?.phone ||
+    workOrder?.customerPhone ||
+    tyreSet?.customerPhone ||
+    ownerProfile?.phone ||
+    null;
   const plate =
-    plateNumber || tyreSet?.plateNumber || customer?.plateNumbers[0] || "";
+    plateNumber ||
+    workOrder?.plateNumber ||
+    tyreSet?.plateNumber ||
+    customer?.plateNumbers[0] ||
+    "";
   const vehicleText =
     vehicleLabel ||
+    workOrder?.vehicleLabel ||
     tyreSet?.brandModel ||
     plate ||
     (locale === "bg" ? "вашия автомобил" : "your vehicle");
@@ -145,6 +183,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         subject: `${auth.garage.name} — ${locale === "bg" ? "Специална покана за сервиз" : "Workshop Service Invitation"}`,
         body: customMessage,
       };
+    }
+    if (campaignType === "quote_followup") {
+      return locale === "bg"
+        ? {
+            subject: `${auth.garage.name} — Очаква се одобрение на оферта (${plate || vehicleText})`,
+            body: `Здравейте, ${recipientName}! Изпратихме актуализирана оферта за ремонт на ${vehicleText}. Можете да я прегледате и потвърдите с 1 клик от статуса на поръчката.`,
+          }
+        : {
+            subject: `${auth.garage.name} — Repair Estimate Awaiting Approval (${plate || vehicleText})`,
+            body: `Hi ${recipientName}, we prepared a repair estimate for ${vehicleText}. Open your live status link to review items and approve in 1 click.`,
+          };
+    }
+    if (campaignType === "seasonal_promo") {
+      return locale === "bg"
+        ? {
+            subject: `${auth.garage.name} — Сезонна преференциална оферта (${vehicleText})`,
+            body:
+              customMessage ||
+              `Здравейте, ${recipientName}! Запазете час през този месец в ${auth.garage.name} с преференциални условия за сезонна профилактика и диагностика на ${vehicleText}.`,
+          }
+        : {
+            subject: `${auth.garage.name} — Seasonal Bay Special Offer (${vehicleText})`,
+            body:
+              customMessage ||
+              `Hi ${recipientName}, book this month with ${auth.garage.name} for our seasonal checkup & priority service offer for ${vehicleText}.`,
+          };
     }
     if (campaignType === "tyre_replacement") {
       return locale === "bg"
@@ -191,7 +255,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   })();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const bookingUrl = `${appUrl}/garages/${auth.garage.slug}`;
+  const targetActionPath =
+    campaignType === "quote_followup" && workOrder?.publicStatusToken
+      ? `/status/${workOrder.publicStatusToken}`
+      : `/garages/${auth.garage.slug}`;
+  const bookingUrl = `${appUrl}${targetActionPath}`;
 
   const remRef = admin.adminDb.collection("reminders").doc();
   const channels: Array<"email" | "sms"> = [];
@@ -200,10 +268,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (channels.length === 0) channels.push("email");
 
   const remDoc: Omit<Reminder, "id"> = {
-    ownerId: customer?.linkedOwnerId ?? null,
+    ownerId: effectiveOwnerId,
     garageId: auth.garage.id,
-    vehicleId: null,
-    workOrderId: null,
+    vehicleId: workOrder?.vehicleId ?? null,
+    workOrderId: workOrder?.id ?? null,
     recipientEmail: toEmail,
     recipientPhone: toPhone,
     recipientName,
@@ -226,14 +294,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   };
   await remRef.set(remDoc);
 
-  const deliveryTargetId = customer?.id ?? tyreSet?.id ?? remRef.id;
+  const deliveryTargetId =
+    workOrder?.id ?? customer?.id ?? tyreSet?.id ?? remRef.id;
   const dispatchResult = await dispatchMultiChannelNotification({
-    ownerId: customer?.linkedOwnerId ?? null,
+    ownerId: effectiveOwnerId,
     garageId: auth.garage.id,
     reminderId: remRef.id,
     deliveryKey: `pro-winback:${deliveryTargetId}:${nowIso.slice(0, 10)}:${campaignType}`,
     channels,
-    createInAppRecord: Boolean(customer?.linkedOwnerId),
+    createInAppRecord: Boolean(effectiveOwnerId),
     consumeGarageQuota: true,
     payload: {
       toEmail,
@@ -243,7 +312,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       subject: templateCopy.subject,
       textBody: `${templateCopy.body}\n\n${bookingUrl}`,
       htmlBody: `<p>${templateCopy.body}</p><p><a href="${bookingUrl}">${auth.garage.name}</a></p>`,
-      actionUrl: `/garages/${auth.garage.slug}`,
+      actionUrl: targetActionPath,
     },
   });
 

@@ -198,6 +198,13 @@ service cloud.firestore {
       allow write: if false; // Written exclusively by server/Admin SDK
     }
 
+    // Whitelisted public vehicle resale service pass projection (no phone, email, raw plate, or full VIN)
+    match /vehiclePublicPass/{publicToken} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if false; // Written exclusively by server/Admin SDK
+    }
+
     match /workOrderItems/{itemId} {
       allow read: if isGarageMember(resource.data.garageId)
         || (isSignedIn() && resource.data.linkedOwnerId == request.auth.uid)

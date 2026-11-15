@@ -2,21 +2,27 @@
 
 import {
   AlertTriangle,
+  Building2,
   Calculator,
+  CalendarRange,
   CheckCircle2,
+  ClipboardList,
   Clock,
   Coins,
   Crown,
   Download,
   ExternalLink,
   FileSpreadsheet,
+  FileWarning,
   Gauge,
   PackageCheck,
   PackagePlus,
+  RotateCcw,
   Search,
   Send,
   Sparkles,
   TrendingUp,
+  Trophy,
   Users,
   Wrench,
 } from "lucide-react";
@@ -24,6 +30,18 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+  GarageB2BFleetTab,
+  GarageSeasonalDemandTab,
+} from "@/components/garage/pro-tools/garage-b2b-demand-tabs";
+import {
+  GarageComebackRadarTab,
+  GarageDviMobileTab,
+} from "@/components/garage/pro-tools/garage-comeback-dvi-tabs";
+import {
+  GarageStalledQuotesTab,
+  GarageTechLeaderboardTab,
+} from "@/components/garage/pro-tools/garage-quotes-techs-tabs";
 import { ProFeatureGate } from "@/components/shared/pro-feature-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,8 +89,9 @@ import type {
 
 interface GarageProToolsClientProps {
   garage: Garage;
+  ownerName: string;
   isPro: boolean;
-  workOrders: WorkOrder[];
+  initialWorkOrders: WorkOrder[];
   workOrderItems: WorkOrderItem[];
   initialParts: InventoryPart[];
   customers: Customer[];
@@ -91,8 +110,14 @@ interface GarageProToolsClientProps {
 const VALID_GARAGE_PRO_TABS = [
   "profit",
   "bays",
+  "quotes",
+  "techs",
   "reorder",
   "tyres",
+  "b2b",
+  "demand",
+  "comebacks",
+  "dvi",
   "winback",
   "exports",
 ] as const;
@@ -100,8 +125,9 @@ type GarageProTab = (typeof VALID_GARAGE_PRO_TABS)[number];
 
 export function GarageProToolsClient({
   garage,
+  ownerName,
   isPro,
-  workOrders,
+  initialWorkOrders,
   workOrderItems,
   initialParts,
   customers,
@@ -121,6 +147,7 @@ export function GarageProToolsClient({
     ? (initialTab as GarageProTab)
     : "profit";
 
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>(initialWorkOrders);
   const [parts, setParts] = useState<InventoryPart[]>(initialParts);
   const [quota, setQuota] = useState(initialQuota);
 
@@ -239,6 +266,12 @@ export function GarageProToolsClient({
           t("gateFeature4"),
           t("gateFeature5"),
           t("gateFeature6"),
+          t("gateFeature7"),
+          t("gateFeature8"),
+          t("gateFeature9"),
+          t("gateFeature10"),
+          t("gateFeature11"),
+          t("gateFeature12"),
         ]}
         upgradeHref="/garage/subscription"
         monthlyPriceEur={settings.proPlanPriceEur}
@@ -500,6 +533,14 @@ export function GarageProToolsClient({
             <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
             {t("tabBays")}
           </TabsTrigger>
+          <TabsTrigger value="quotes" className="gap-1.5">
+            <FileWarning className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("tabQuotes")}
+          </TabsTrigger>
+          <TabsTrigger value="techs" className="gap-1.5">
+            <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("tabTechs")}
+          </TabsTrigger>
           <TabsTrigger value="reorder" className="gap-1.5">
             <PackagePlus className="h-3.5 w-3.5" aria-hidden="true" />
             {t("tabReorder")}
@@ -507,6 +548,22 @@ export function GarageProToolsClient({
           <TabsTrigger value="tyres" className="gap-1.5">
             <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
             {t("tabTyres")}
+          </TabsTrigger>
+          <TabsTrigger value="b2b" className="gap-1.5">
+            <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("tabB2b")}
+          </TabsTrigger>
+          <TabsTrigger value="demand" className="gap-1.5">
+            <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("tabDemand")}
+          </TabsTrigger>
+          <TabsTrigger value="comebacks" className="gap-1.5">
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("tabComebacks")}
+          </TabsTrigger>
+          <TabsTrigger value="dvi" className="gap-1.5">
+            <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("tabDvi")}
           </TabsTrigger>
           <TabsTrigger value="winback" className="gap-1.5">
             <Users className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1360,6 +1417,87 @@ export function GarageProToolsClient({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* TAB: Stalled Quote Recovery */}
+        <TabsContent value="quotes">
+          <GarageStalledQuotesTab
+            workOrders={workOrders}
+            quotaRemaining={quota.remaining}
+            locale={locale}
+            onQuotaUsed={() =>
+              setQuota((q) => ({
+                ...q,
+                used: q.used + 1,
+                remaining: Math.max(0, q.remaining - 1),
+              }))
+            }
+          />
+        </TabsContent>
+
+        {/* TAB: Technician Leaderboard & Commissions */}
+        <TabsContent value="techs">
+          <GarageTechLeaderboardTab
+            ownerName={ownerName}
+            staff={staff}
+            workOrders={workOrders}
+            workOrderItems={workOrderItems}
+            locale={locale}
+            onWorkOrderAssigned={(woId, uid, name) =>
+              setWorkOrders((prev) =>
+                prev.map((w) =>
+                  w.id === woId
+                    ? { ...w, assignedStaffUid: uid, assignedStaffName: name }
+                    : w
+                )
+              )
+            }
+          />
+        </TabsContent>
+
+        {/* TAB: Corporate / B2B Fleet Accounts */}
+        <TabsContent value="b2b">
+          <GarageB2BFleetTab
+            customers={customers}
+            workOrders={workOrders}
+            locale={locale}
+            garageName={garage.name}
+          />
+        </TabsContent>
+
+        {/* TAB: Seasonal Demand Planner */}
+        <TabsContent value="demand">
+          <GarageSeasonalDemandTab
+            workOrders={workOrders}
+            appointments={appointments}
+            customers={customers}
+            quotaRemaining={quota.remaining}
+            locale={locale}
+            onQuotaUsed={() =>
+              setQuota((q) => ({
+                ...q,
+                used: q.used + 1,
+                remaining: Math.max(0, q.remaining - 1),
+              }))
+            }
+          />
+        </TabsContent>
+
+        {/* TAB: Comeback & Warranty Quality Radar */}
+        <TabsContent value="comebacks">
+          <GarageComebackRadarTab workOrders={workOrders} locale={locale} />
+        </TabsContent>
+
+        {/* TAB: Mobile Multi-Point Inspection (DVI) */}
+        <TabsContent value="dvi">
+          <GarageDviMobileTab
+            workOrders={workOrders}
+            onDviSaved={(woId, dviChecks) =>
+              setWorkOrders((prev) =>
+                prev.map((w) => (w.id === woId ? { ...w, dviChecks } : w))
+              )
+            }
+          />
         </TabsContent>
       </Tabs>
     </div>

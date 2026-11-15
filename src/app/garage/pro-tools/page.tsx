@@ -16,7 +16,7 @@ interface GarageProToolsPageProps {
 export default async function GarageProToolsPage({
   searchParams,
 }: GarageProToolsPageProps) {
-  const [{ garage }, resolvedSearch] = await Promise.all([
+  const [{ garage, profile }, resolvedSearch] = await Promise.all([
     requireGarageManagerPage(),
     searchParams ?? Promise.resolve<{ tab?: string }>({}),
   ]);
@@ -33,8 +33,9 @@ export default async function GarageProToolsPage({
   return (
     <GarageProToolsClient
       garage={garage}
+      ownerName={profile.displayName}
       isPro={isGaragePro(garage)}
-      workOrders={bundle.workOrders}
+      initialWorkOrders={bundle.workOrders}
       workOrderItems={workOrderItems}
       initialParts={inventoryParts}
       customers={bundle.customers}

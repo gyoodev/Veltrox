@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   AlertTriangle,
   BellPlus,
   Calculator,
@@ -16,7 +17,11 @@ import {
   FileSpreadsheet,
   Fuel,
   Gauge,
+  Globe2,
   Printer,
+  QrCode,
+  Scale,
+  ScanText,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -26,6 +31,18 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+  DriverFleetKeepReplaceTab,
+  DriverPrePurchaseTab,
+} from "@/components/car-diary/pro-tools/driver-fleet-prepurch-tabs";
+import {
+  DriverObdTriageTab,
+  DriverOcrReceiptTab,
+} from "@/components/car-diary/pro-tools/driver-obd-ocr-tabs";
+import {
+  DriverCrossBorderTab,
+  DriverServicePassTab,
+} from "@/components/car-diary/pro-tools/driver-pass-border-tabs";
 import { ProFeatureGate } from "@/components/shared/pro-feature-gate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,6 +74,7 @@ import { formatCurrency, formatNumber } from "@/lib/utils";
 import type {
   AppLocale,
   DiaryEntry,
+  Garage,
   PlatformSettingsConfig,
   Reminder,
   ReminderType,
@@ -73,6 +91,9 @@ interface DriverProToolsClientProps {
   documents: VehicleDocument[];
   initialReminders: Reminder[];
   fuelPrices: BulgariaFuelItem[];
+  approvedGarages: Garage[];
+  userName: string;
+  userPhone: string;
   settings: PlatformSettingsConfig;
   initialTab?: string;
 }
@@ -80,8 +101,14 @@ interface DriverProToolsClientProps {
 const VALID_DRIVER_PRO_TABS = [
   "tco",
   "fuel",
+  "fleet",
   "forecaster",
   "budget",
+  "prepurch",
+  "pass",
+  "crossborder",
+  "obd",
+  "ocr",
   "resale",
   "export",
 ] as const;
@@ -154,6 +181,9 @@ export function DriverProToolsClient({
   documents,
   initialReminders,
   fuelPrices,
+  approvedGarages,
+  userName,
+  userPhone,
   settings,
   initialTab,
 }: DriverProToolsClientProps) {
@@ -377,6 +407,12 @@ export function DriverProToolsClient({
           t("gateFeature4"),
           t("gateFeature5"),
           t("gateFeature6"),
+          t("gateFeature7"),
+          t("gateFeature8"),
+          t("gateFeature9"),
+          t("gateFeature10"),
+          t("gateFeature11"),
+          t("gateFeature12"),
         ]}
         upgradeHref="/app/subscription"
         monthlyPriceEur={settings.userProPlanPriceEur}
@@ -716,6 +752,10 @@ export function DriverProToolsClient({
               <Fuel className="h-3.5 w-3.5" aria-hidden="true" />
               {t("tabFuel")}
             </TabsTrigger>
+            <TabsTrigger value="fleet" className="gap-1.5">
+              <Scale className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("tabFleet")}
+            </TabsTrigger>
             <TabsTrigger value="forecaster" className="gap-1.5">
               <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
               {t("tabForecaster")}
@@ -723,6 +763,26 @@ export function DriverProToolsClient({
             <TabsTrigger value="budget" className="gap-1.5">
               <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
               {t("tabBudget")}
+            </TabsTrigger>
+            <TabsTrigger value="prepurch" className="gap-1.5">
+              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("tabPrePurch")}
+            </TabsTrigger>
+            <TabsTrigger value="pass" className="gap-1.5">
+              <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("tabPass")}
+            </TabsTrigger>
+            <TabsTrigger value="crossborder" className="gap-1.5">
+              <Globe2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("tabCrossBorder")}
+            </TabsTrigger>
+            <TabsTrigger value="obd" className="gap-1.5">
+              <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("tabObd")}
+            </TabsTrigger>
+            <TabsTrigger value="ocr" className="gap-1.5">
+              <ScanText className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("tabOcr")}
             </TabsTrigger>
             <TabsTrigger value="resale" className="gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1638,6 +1698,54 @@ export function DriverProToolsClient({
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* TAB: Multi-Vehicle Fleet & Keep vs. Replace */}
+          <TabsContent value="fleet">
+            <DriverFleetKeepReplaceTab
+              vehicles={vehicles}
+              entries={entries}
+              locale={locale}
+            />
+          </TabsContent>
+
+          {/* TAB: Pre-Purchase Used Car Scorer */}
+          <TabsContent value="prepurch">
+            <DriverPrePurchaseTab locale={locale} />
+          </TabsContent>
+
+          {/* TAB: Verified QR Service Pass */}
+          <TabsContent value="pass">
+            <DriverServicePassTab vehicles={vehicles} />
+          </TabsContent>
+
+          {/* TAB: Cross-Border Trip Readiness */}
+          <TabsContent value="crossborder">
+            <DriverCrossBorderTab
+              vehicles={vehicles}
+              documents={documents}
+              reminders={reminders}
+            />
+          </TabsContent>
+
+          {/* TAB: Warning-Light & OBD Fault Triage */}
+          <TabsContent value="obd">
+            <DriverObdTriageTab
+              vehicles={vehicles}
+              approvedGarages={approvedGarages}
+              userName={userName}
+              userPhone={userPhone}
+              locale={locale}
+            />
+          </TabsContent>
+
+          {/* TAB: Receipt & Invoice Smart Importer */}
+          <TabsContent value="ocr">
+            <DriverOcrReceiptTab
+              vehicles={vehicles}
+              locale={locale}
+              onEntryCreated={(entry) => setEntries((prev) => [entry, ...prev])}
+            />
           </TabsContent>
         </Tabs>
       )}

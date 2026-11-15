@@ -3,6 +3,7 @@ import { attachmentItemSchema } from "@/lib/validators/car-diary";
 import { licensePlateSchema } from "@/lib/validators/entities";
 import {
   DTC_SEVERITIES,
+  DVI_STATUSES,
   FUEL_LEVELS,
   QUOTE_STATUSES,
   STAFF_ROLES,
@@ -146,6 +147,29 @@ const dtcDiagnosticCodeSchema = z.object({
   severity: z.enum(DTC_SEVERITIES),
 });
 
+const dviCheckItemSchema = z.object({
+  id: z.string().min(1).max(64),
+  label: z.string().trim().min(2).max(160),
+  status: z.enum(DVI_STATUSES),
+  note: z.string().trim().max(400).nullable().optional(),
+  photoUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .refine(
+      (u) =>
+        u.startsWith("http://") ||
+        u.startsWith("https://") ||
+        u.startsWith("/") ||
+        u.startsWith("data:"),
+      { message: "Invalid image URL" }
+    )
+    .nullable()
+    .optional(),
+  estimatedCostEur: z.number().min(0).max(50_000).nullable().optional(),
+  updatedAt: z.string().max(64).optional(),
+});
+
 const workOrderQuoteItemSchema = z.object({
   id: z.string().min(1).max(64),
   type: z.enum(["labor", "part"]),
@@ -174,6 +198,8 @@ const safeImageUrlArraySchema = z
 
 export const workOrderPatchSchema = z.object({
   status: z.enum(WORK_ORDER_STATUSES).optional(),
+  assignedStaffUid: z.string().trim().max(128).nullable().optional(),
+  assignedStaffName: z.string().trim().max(100).nullable().optional(),
   vehicleLabel: z.string().trim().min(1).max(80).optional(),
   mileageKm: z.number().int().min(0).max(3_000_000).nullable().optional(),
   customerSummary: z.string().trim().max(2000).nullable().optional(),
@@ -186,6 +212,7 @@ export const workOrderPatchSchema = z.object({
   intakeConditionNotes: z.string().trim().max(1000).nullable().optional(),
   dtcCodes: z.array(dtcDiagnosticCodeSchema).max(30).optional(),
   diagnosticNotes: z.string().trim().max(2000).nullable().optional(),
+  dviChecks: z.array(dviCheckItemSchema).max(30).optional(),
   quoteStatus: z.enum(QUOTE_STATUSES).optional(),
   quoteNotes: z.string().trim().max(2000).nullable().optional(),
   quoteItems: z.array(workOrderQuoteItemSchema).max(40).optional(),

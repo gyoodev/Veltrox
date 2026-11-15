@@ -364,6 +364,7 @@ export async function syncPublicWorkOrderProjection(
     afterPhotoUrls: workOrder.afterPhotoUrls ?? [],
     dtcCodes: workOrder.dtcCodes ?? [],
     diagnosticNotes: workOrder.diagnosticNotes ?? null,
+    dviChecks: workOrder.dviChecks ?? [],
     quoteStatus: workOrder.quoteStatus ?? "none",
     quoteNotes: workOrder.quoteNotes ?? null,
     quoteItems: workOrder.quoteItems ?? [],

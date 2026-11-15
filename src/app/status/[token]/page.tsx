@@ -177,6 +177,67 @@ export default async function PublicWorkOrderStatusPage({
           currency={projection.currency}
         />
 
+        {/* Digital Vehicle Inspection (DVI Checklist) */}
+        {(projection.dviChecks?.length ?? 0) > 0 ? (
+          <Card className="space-y-4 p-6">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              {t("dviHeading")}
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {projection.dviChecks?.map((chk) => (
+                <div
+                  key={chk.id}
+                  className="flex flex-col justify-between gap-2 rounded-xl border border-border bg-secondary/20 p-3.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-sm font-medium text-foreground">
+                      {chk.label}
+                    </span>
+                    <Badge
+                      variant={
+                        chk.status === "critical"
+                          ? "destructive"
+                          : chk.status === "attention"
+                            ? "warning"
+                            : "success"
+                      }
+                      className="shrink-0 text-[11px]"
+                    >
+                      {t(`dvi_${chk.status}`)}
+                    </Badge>
+                  </div>
+                  {chk.note ? (
+                    <p className="text-xs text-muted-foreground">{chk.note}</p>
+                  ) : null}
+                  {chk.estimatedCostEur !== null &&
+                  chk.estimatedCostEur !== undefined &&
+                  chk.estimatedCostEur > 0 ? (
+                    <p className="font-mono text-xs text-primary">
+                      ~ {formatCurrency(chk.estimatedCostEur, locale, "EUR")}
+                    </p>
+                  ) : null}
+                  {chk.photoUrl ? (
+                    <a
+                      href={chk.photoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 block h-28 overflow-hidden rounded-lg border border-border"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={chk.photoUrl}
+                        alt={chk.label}
+                        className="h-full w-full object-cover"
+                      />
+                    </a>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+
         {/* Diagnostics & OBD-II Findings */}
         {(projection.dtcCodes?.length ?? 0) > 0 || projection.diagnosticNotes ? (
           <Card className="space-y-4 p-6">

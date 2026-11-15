@@ -220,6 +220,14 @@ export async function PATCH(
     ...existing,
     id: workOrderId,
     status: nextStatus,
+    assignedStaffUid:
+      data.assignedStaffUid !== undefined
+        ? data.assignedStaffUid
+        : existing.assignedStaffUid ?? null,
+    assignedStaffName:
+      data.assignedStaffName !== undefined
+        ? data.assignedStaffName
+        : existing.assignedStaffName ?? null,
     vehicleLabel: data.vehicleLabel ?? existing.vehicleLabel,
     mileageKm:
       data.mileageKm !== undefined ? data.mileageKm : existing.mileageKm,
@@ -270,6 +278,10 @@ export async function PATCH(
           ? data.diagnosticNotes.trim()
           : null
         : existing.diagnosticNotes ?? null,
+    dviChecks:
+      data.dviChecks !== undefined
+        ? data.dviChecks
+        : existing.dviChecks ?? [],
     quoteStatus: nextQuoteStatus,
     quoteNotes:
       data.quoteNotes !== undefined

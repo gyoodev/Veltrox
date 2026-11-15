@@ -5,13 +5,14 @@ import {
   type ExpenseAnalyticsSummary,
 } from "@/lib/diary-metrics";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
-import { toPlainDoc } from "@/lib/firebase/serialize";
+import { toPlainDoc, toPlainFirestoreData } from "@/lib/firebase/serialize";
 import type {
   DiaryEntry,
   Garage,
   Reminder,
   Vehicle,
   VehicleDocument,
+  VehiclePublicPass,
 } from "@/types/domain";
 
 export interface UserDiaryBundle {
@@ -125,4 +126,18 @@ export async function getApprovedGarageBySlug(
     .find((g) => g.status === "approved");
 
   return match ?? null;
+}
+
+export async function getVehiclePublicPass(
+  token: string
+): Promise<VehiclePublicPass | null> {
+  const admin = getFirebaseAdmin();
+  if (!admin) return null;
+
+  const snap = await admin.adminDb
+    .collection("vehiclePublicPass")
+    .doc(token)
+    .get();
+  if (!snap.exists) return null;
+  return toPlainFirestoreData(snap.data() as VehiclePublicPass);
 }

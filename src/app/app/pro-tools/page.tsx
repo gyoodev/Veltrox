@@ -1,7 +1,7 @@
 import { DriverProToolsClient } from "@/components/car-diary/driver-pro-tools-client";
 import { requireRole } from "@/lib/auth/server-auth";
 import { getPlatformSettings } from "@/lib/data/platform-settings";
-import { getUserDiaryBundle } from "@/lib/data/user-diary";
+import { getApprovedGarages, getUserDiaryBundle } from "@/lib/data/user-diary";
 import { fetchBulgariaFuelPrices } from "@/lib/fuel-prices";
 import { isDriverPro } from "@/lib/subscriptions/entitlements";
 
@@ -17,10 +17,11 @@ export default async function DriverProToolsPage({
     searchParams ?? Promise.resolve<{ tab?: string }>({}),
   ]);
 
-  const [bundle, settings, fuelPayload] = await Promise.all([
+  const [bundle, settings, fuelPayload, approvedGarages] = await Promise.all([
     getUserDiaryBundle(profile.uid),
     getPlatformSettings(),
     fetchBulgariaFuelPrices(),
+    getApprovedGarages(),
   ]);
 
   return (
@@ -31,6 +32,9 @@ export default async function DriverProToolsPage({
       documents={bundle.documents}
       initialReminders={bundle.reminders}
       fuelPrices={fuelPayload.fuels}
+      approvedGarages={approvedGarages}
+      userName={profile.displayName}
+      userPhone={profile.phone ?? ""}
       settings={settings}
       initialTab={resolvedSearch.tab}
     />

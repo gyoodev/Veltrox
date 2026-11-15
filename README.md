@@ -62,6 +62,40 @@ Veltrox connects **car owners** and **independent automotive workshops** in one 
 
 ---
 
+## Pro Paid Tool Suites (24 Tools)
+
+Every Pro tool is documented directly inside `/app/subscription` (Driver Pro) and `/garage/subscription` (Garage Pro) with deep links into the dedicated Pro suites:
+
+### Driver Pro Suite (`/app/pro-tools` — 12 Tools)
+1. **True Cost per Km (TCO) & Trip Fuel Simulator** (`?tab=tco`) — Tracks real cost/km per vehicle and estimates multi-stop trip fuel and toll expenses using live prices.
+2. **Fuel Economy & LPG / Hybrid Payback** (`?tab=fuel`) — Summarizes real fuel logs per vehicle and calculates break-even payback months for LPG, hybrid, or EV transitions.
+3. **Smart Maintenance Forecaster** (`?tab=forecaster`) — Projects upcoming oil, brake, tyre, and timing intervals from monthly mileage and schedules reminders in 1 click.
+4. **12-Month Ownership Budget & Gap Calendar** (`?tab=budget`) — Maps annual GO, Casco, PTI, and vignette renewals, recommends monthly sinking funds, and detects compliance gaps.
+5. **Buyer-Ready Resale Dossier** (`?tab=resale`) — Audits odometer integrity, calculates readiness (0–100%), and produces a copyable/printable buyer dossier.
+6. **One-Click CSV Accounting Exports** (`?tab=export`) — Downloads vehicle specifications, mileage records, and expense ledgers in clean CSV format.
+7. **Multi-Vehicle Fleet Compare & Keep-vs-Replace** (`?tab=fleet`) — Compares monthly burn and 12-month repair-to-value ratios across multiple cars to evaluate keeping vs. replacing.
+8. **Pre-Purchase Inspection & Day-1 Estimator** (`?tab=prepurch`) — Scores candidate used cars across 10 checkpoints (0–100), suggests a fair counter-offer discount, and sums Day-1 notary/service/insurance costs.
+9. **Verified Digital Service Pass & QR** (`?tab=pass`) — Publishes a zero-PII public `/verify-car/[token]` service timeline with verified garage stamps and a downloadable ISO-18004 QR SVG window sticker.
+10. **Cross-Border Trip Readiness Checker** (`?tab=crossborder`) — Validates GO/Green Card, PTI, vignettes, winter tyre requirements, and mandatory gear for Greece, Romania, Serbia, Turkey, and EU travel.
+11. **OBD-II Fault Triage & Instant Booking** (`?tab=obd`) — Translates OBD-II fault codes and dashboard warnings into severity advice, typical repair cost ranges, and 1-click workshop bookings.
+12. **Smart Receipt Snippet & Photo Parser** (`?tab=ocr`) — Uploads receipt photos and extracts amounts, odometer readings, and service categories straight into the car diary.
+
+### Garage Pro Suite (`/garage/pro-tools` — 12 Tools)
+1. **Gross Margin & Quote Simulator** (`?tab=profit`) — Evaluates net parts + labor margin per work order and simulates customer quotes with markup and VAT.
+2. **Bay Capacity & Turnaround Analyzer** (`?tab=bays`) — Measures repair turnaround hours, visualizes 7-day booking load, and models monthly bay labor revenue.
+3. **Auto-Reorder & 1-Click Restock** (`?tab=reorder`) — Flags low-stock inventory SKUs, calculates purchase-order totals, and updates stock quantities in 1 click.
+4. **Tyre Hotel Upsell Engine** (`?tab=tyres`) — Identifies stored tyre sets with low tread (`≤ 3.5 mm`), estimates seasonal revenue, and sends 1-click customer alerts.
+5. **VIP & At-Risk Customer Win-Back** (`?tab=winback`) — Segments customers by lifetime spend (LTV) and recency to re-engage inactive drivers with targeted outreach.
+6. **Accounting, PO & Customer CSV Exports** (`?tab=exports`) — Downloads completed work orders, customer CRM cohorts, inventory valuation, and purchase-order sheets as CSV.
+7. **Stalled Quote Recovery & Follow-Up** (`?tab=quotes`) — Surfaces pending quotes or silent work orders past a configurable hour threshold and dispatches 1-click status-link nudges.
+8. **Mechanic Productivity & Commission Split** (`?tab=techs`) — Assigns work orders to mechanics, ranks completed volume and labor revenue, and models labor/parts payout splits.
+9. **B2B Fleet Accounts & Consolidated Statements** (`?tab=b2b`) — Groups multi-vehicle corporate accounts across license plates, tracks open vs. billed totals, and exports CSV fleet statements.
+10. **Seasonal Demand Heatmap & Slow-Month Promos** (`?tab=demand`) — Maps 12-month workshop demand peaks vs. slow periods and sends targeted promotional notifications to customers.
+11. **Repeat Visit & Warranty Comeback Radar** (`?tab=comebacks`) — Flags vehicles returning within configurable warranty windows (`30`/`45`/`60`/`90` days) so advisors can inspect rework risk early.
+12. **Mobile 8-Point Digital Vehicle Inspection (DVI)** (`?tab=dvi`) — Completes a green/amber/red 8-point checklist with mechanic notes, cost estimates, and photos synced directly to `/status/[token]`.
+
+---
+
 ## Roadmap & Phase Status
 
 | Phase | Milestone | Status |
@@ -121,10 +155,11 @@ Veltrox/
 │   │   ├── (legal)/               # /privacy, /terms (GDPR & platform terms)
 │   │   ├── admin/                 # ADMIN governance (/approvals, /users, /settings, /analytics, /content, /audit-logs)
 │   │   ├── api/                   # REST Route Handlers (auth, billing, push, appointments, garage, admin, notifications, cron)
-│   │   ├── app/                   # Car Owner workspace (/app/cars, /expenses, /reminders, /documents)
-│   │   ├── garage/                # Garage & Staff workspace (/work-orders, /inventory, /customers, /tyres, /analytics...)
+│   │   ├── app/                   # Car Owner workspace (/app/cars, /expenses, /reminders, /documents, /subscription, /pro-tools)
+│   │   ├── garage/                # Garage & Staff workspace (/work-orders, /inventory, /customers, /tyres, /analytics, /subscription, /pro-tools)
 │   │   ├── garages/               # Public SEO garage directory (/garages, /garages/[slug])
-│   │   └── status/[token]/        # Public zero-login repair status tracker & quote approval (noindex, whitelisted fields)
+│   │   ├── status/[token]/        # Public zero-login repair status tracker, DVI report & quote approval (noindex, whitelisted fields)
+│   │   └── verify-car/[token]/    # Public zero-PII Verified Digital Service Pass & odometer audit (noindex)
 │   ├── components/
 │   │   ├── admin/                 # Approvals queue, user governance, pricing/promo settings, analytics, CMS editor, audit viewer
 │   │   ├── car-diary/             # Vehicle cards, timeline dialogs, Recharts analytics, service book print
@@ -143,10 +178,12 @@ Veltrox/
 │   │   ├── data/                  # Server Firestore loaders (user-diary.ts, garage.ts, inventory.ts, admin.ts, platform-settings.ts)
 │   │   ├── firebase/              # Client SDK (consent-gated analytics) & Admin SDK singleton
 │   │   ├── notifications/         # Multi-channel providers (Resend Email, Twilio SMS REST, Viber Business REST, Web Push VAPID)
+│   │   ├── subscriptions/         # Entitlements, quotas, & pure Driver Pro / Garage Pro metrics engines (entitlements.ts, pro-metrics.ts, pro-metrics-extended.ts)
 │   │   ├── validators/            # Shared Zod schemas (auth, profile, car-diary, garage, inventory, admin)
 │   │   ├── analytics-metrics.ts   # Garage revenue/gross-margin/retention & Admin platform analytics engine
 │   │   ├── diary-metrics.ts       # Fuel L/100km, cost/km, category totals & reminder urgency helpers
-│   │   └── garage-utils.ts        # Plate normalization/masking, slugifier, token generator, CSV serializer
+│   │   ├── garage-utils.ts        # Plate normalization/masking, slugifier, token generator, CSV serializer
+│   │   └── qr-svg.ts              # Zero-dependency ISO-18004 QR Version 1–6 SVG matrix encoder
 │   ├── messages/                  # bg.json (default) & en.json translation catalogs
 │   ├── types/domain.ts            # Strict TypeScript interfaces for all Firestore collections
 │   └── middleware.ts              # Edge route protection & role/status redirects
@@ -180,7 +217,8 @@ Veltrox/
 | `workOrders` | Workshop repair orders, intake protocol, OBD-II DTC codes, quote workflow, before/after photos, internal notes, totals |
 | `workOrderItems` | Itemized labor and parts lines associated with a `WorkOrder` (including optional `inventoryPartId`, `sku`, `costPrice`) |
 | `inventoryParts` | Garage spare-parts SKU catalog, supplier cost/sell pricing, stock quantities & low-stock alert thresholds |
-| `workOrderPublicStatus` | **GDPR-safe public projection** keyed by unguessable `publicToken` (masked plate, status, quote approval, DTC findings, photos—no PII) |
+| `workOrderPublicStatus` | **GDPR-safe public projection** keyed by unguessable `publicToken` (masked plate, status, DVI checklist, quote approval, DTC findings, photos—no PII) |
+| `vehiclePublicPass` | **Zero-PII Verified Digital Service Pass** keyed by `publicToken` (sanitized service timeline, verified garage stamps, odometer integrity, compliance summary) |
 | `appointments` | Workshop calendar bookings and car-owner online appointment requests |
 | `tyreSets` | Seasonal Tyre Hotel sets, rack/shelf locations, tread depth, and storage status |
 | `notifications` | Multi-channel & in-app notification records (`email`, `sms`, `viber`, `push`, `in_app`) |
