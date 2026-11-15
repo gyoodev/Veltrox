@@ -1,0 +1,77 @@
+name: Capacitor Mobile Builds (Android & iOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "Production Next.js URL loaded by the Capacitor WebView"
+        required: false
+        default: "https://veltrox-one.vercel.app"
+
+jobs:
+  android:
+    name: Build Android (APK & AAB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+      - name: Install dependencies & sync Android
+        env:
+          CAPACITOR_SERVER_URL: ${{ inputs.server_url }}
+        run: |
+          npm ci
+          npx cap sync android
+      - name: Build Debug APK, Release APK & Release AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug assembleRelease bundleRelease
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: veltrox-android-builds
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+
+  ios:
+    name: Build iOS (Xcode Archive)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install dependencies, CocoaPods & sync iOS
+        env:
+          CAPACITOR_SERVER_URL: ${{ inputs.server_url }}
+        run: |
+          npm ci
+          npx cap sync ios
+          cd ios/App
+          pod install
+      - name: Build Unsigned iOS Archive (.xcarchive)
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath ios/App/build/Veltrox.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+      - name: Upload iOS Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: veltrox-ios-xcarchive
+          path: ios/App/build/Veltrox.xcarchive
+

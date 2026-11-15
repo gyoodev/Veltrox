@@ -136,6 +136,12 @@ Every Pro tool is documented directly inside `/app/subscription` (Driver Pro) an
 
 ```text
 Veltrox/
+├── .github/workflows/             # CI pipelines (capacitor-builds.yml for Android APK/AAB & macOS iOS .xcarchive)
+├── android/                       # Native Android Gradle project (@capacitor/android, app.veltrox.mobile)
+├── assets/                        # High-res 1024px icons & 2732px splash source graphics for @capacitor/assets
+├── capacitor-web/                 # Branded offline/connectivity recovery shell bundled inside native apps
+├── capacitor.config.ts            # Capacitor 7 hybrid configuration (live Next.js server.url + native plugin config)
+├── ios/                           # Native Xcode project (@capacitor/ios, Info.plist permissions, CocoaPods Podfile)
 ├── functions/                     # Firebase Cloud Functions v2 (europe-west1, Node 20)
 │   ├── src/index.ts               # dailyVeltroxReminderSweep + WorkOrder & Appointment triggers
 │   ├── .env.example               # Functions runtime env template (RESEND_API_KEY, etc.)
@@ -147,6 +153,7 @@ Veltrox/
 │   └── sw.js                      # Service Worker handling Web Push payloads & notification clicks
 ├── scripts/
 │   ├── approve-garage.ts          # CLI: Approve a pending GARAGE_OWNER + sync claims & audit log
+│   ├── build-android.mjs          # Cross-platform Capacitor sync + Gradle APK/AAB wrapper script
 │   ├── import-service-account.mjs # CLI: Safely import Firebase Admin JSON into Git-ignored .env.local
 │   └── set-admin.ts               # CLI: Bootstrap or promote an existing user to ADMIN
 ├── src/
@@ -338,6 +345,33 @@ All user-facing copy lives in `src/messages/bg.json` (Bulgarian default) and `sr
      - *(Optional Web Push)* `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (generate via `npx web-push generate-vapid-keys`)
 3. **Authorize Production Domain in Firebase**:
    - Go to **Firebase Console → Authentication → Settings → Authorized domains** and add your Vercel production domain.
+
+---
+
+## Mobile Applications (Capacitor 7 — Android & iOS)
+
+Veltrox ships native **Android** (`android/`) and **iOS** (`ios/`) wrappers built with **Capacitor 7** (`appId: app.veltrox.mobile`) in hybrid live-server mode (`capacitor.config.ts`) targeting the deployed Next.js App Router backend (`https://veltrox-one.vercel.app`, overridable via `CAPACITOR_SERVER_URL`), paired with:
+- A local dark-themed connectivity recovery shell (`capacitor-web/index.html` configured via `server.errorPath`)
+- Native hardware Back button history navigation, `#090d16` dark StatusBar, SplashScreen coordination, and `veltrox://` deep linking via [src/components/providers/capacitor-bridge.tsx](./src/components/providers/capacitor-bridge.tsx)
+- Generated native icons & splash screens (`npm run mobile:assets`) and camera/photo-library permissions in `AndroidManifest.xml` & `ios/App/App/Info.plist` for DVI and receipt photo uploads
+
+### Useful Capacitor Commands
+```bash
+# Regenerate all Android mipmaps & iOS AppIcon/Splash assets from assets/
+npm run mobile:assets
+
+# Sync Capacitor configuration & plugins into android/ and ios/
+npm run mobile:sync
+
+# Build Android Debug APK, Release APK, and Play Store App Bundle (.aab)
+npm run mobile:android:debug
+npm run mobile:android:release
+npm run mobile:android:all
+```
+
+> **Release Signing (Android)**: Export `VELTROX_ANDROID_KEYSTORE_PATH`, `VELTROX_ANDROID_KEYSTORE_PASSWORD`, `VELTROX_ANDROID_KEY_ALIAS`, and `VELTROX_ANDROID_KEY_PASSWORD` before running `npm run mobile:android:release` to produce signed release binaries automatically.
+
+> **iOS Builds (macOS / GitHub Actions)**: Apple's `xcodebuild` and iOS SDK require macOS. On macOS, run `npx cap sync ios && cd ios/App && pod install` and open `ios/App/App.xcworkspace` in Xcode, or run the included [.github/workflows/capacitor-builds.yml](./.github/workflows/capacitor-builds.yml) workflow on `macos-latest`.
 
 ---
 

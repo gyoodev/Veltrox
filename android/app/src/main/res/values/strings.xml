@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Veltrox</string>
+    <string name="title_activity_main">Veltrox</string>
+    <string name="package_name">app.veltrox.mobile</string>
+    <string name="custom_url_scheme">app.veltrox.mobile</string>
+</resources>

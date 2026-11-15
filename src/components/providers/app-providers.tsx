@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/components/providers/auth-provider";
+import { CapacitorBridge } from "@/components/providers/capacitor-bridge";
 import type { UserProfile } from "@/types/domain";
 
 export function AppProviders({
@@ -23,6 +24,7 @@ export function AppProviders({
     >
       <MotionConfig reducedMotion="user">
         <AuthProvider initialProfile={initialProfile}>
+          <CapacitorBridge />
           {children}
           <Toaster
             position="top-right"
