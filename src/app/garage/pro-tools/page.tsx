@@ -9,8 +9,17 @@ import { getPlatformSettings } from "@/lib/data/platform-settings";
 import { getEffectiveReminderQuota } from "@/lib/garage-utils";
 import { isGaragePro } from "@/lib/subscriptions/entitlements";
 
-export default async function GarageProToolsPage() {
-  const { garage } = await requireGarageManagerPage();
+interface GarageProToolsPageProps {
+  searchParams?: Promise<{ tab?: string }>;
+}
+
+export default async function GarageProToolsPage({
+  searchParams,
+}: GarageProToolsPageProps) {
+  const [{ garage }, resolvedSearch] = await Promise.all([
+    requireGarageManagerPage(),
+    searchParams ?? Promise.resolve<{ tab?: string }>({}),
+  ]);
 
   const [bundle, workOrderItems, inventoryParts, settings] = await Promise.all([
     getGarageWorkspaceBundle(garage.id),
@@ -29,12 +38,16 @@ export default async function GarageProToolsPage() {
       workOrderItems={workOrderItems}
       initialParts={inventoryParts}
       customers={bundle.customers}
+      appointments={bundle.appointments}
+      tyreSets={bundle.tyreSets}
+      staff={bundle.staff}
       initialQuota={{
         used: quota.used,
         quota: quota.quota,
         remaining: quota.remaining,
       }}
       settings={settings}
+      initialTab={resolvedSearch.tab}
     />
   );
 }

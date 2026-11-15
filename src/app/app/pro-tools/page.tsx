@@ -5,8 +5,17 @@ import { getUserDiaryBundle } from "@/lib/data/user-diary";
 import { fetchBulgariaFuelPrices } from "@/lib/fuel-prices";
 import { isDriverPro } from "@/lib/subscriptions/entitlements";
 
-export default async function DriverProToolsPage() {
-  const { profile } = await requireRole(["USER", "ADMIN"]);
+interface DriverProToolsPageProps {
+  searchParams?: Promise<{ tab?: string }>;
+}
+
+export default async function DriverProToolsPage({
+  searchParams,
+}: DriverProToolsPageProps) {
+  const [{ profile }, resolvedSearch] = await Promise.all([
+    requireRole(["USER", "ADMIN"]),
+    searchParams ?? Promise.resolve<{ tab?: string }>({}),
+  ]);
 
   const [bundle, settings, fuelPayload] = await Promise.all([
     getUserDiaryBundle(profile.uid),
@@ -23,6 +32,7 @@ export default async function DriverProToolsPage() {
       initialReminders={bundle.reminders}
       fuelPrices={fuelPayload.fuels}
       settings={settings}
+      initialTab={resolvedSearch.tab}
     />
   );
 }

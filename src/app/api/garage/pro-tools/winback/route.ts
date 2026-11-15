@@ -7,17 +7,34 @@ import {
   buildProRequiredResponse,
   isGaragePro,
 } from "@/lib/subscriptions/entitlements";
-import type { AppLocale, Customer, Reminder, UserProfile } from "@/types/domain";
+import type {
+  AppLocale,
+  Customer,
+  Reminder,
+  TyreSet,
+  UserProfile,
+} from "@/types/domain";
 
 export const runtime = "nodejs";
 
-const winbackSchema = z.object({
-  customerId: z.string().min(1).max(128),
-  campaignType: z.enum(["seasonal_check", "annual_service", "tyre_swap", "custom"]),
-  customMessage: z.string().trim().max(400).optional(),
-  plateNumber: z.string().trim().max(24).optional(),
-  vehicleLabel: z.string().trim().max(120).optional(),
-});
+const winbackSchema = z
+  .object({
+    customerId: z.string().min(1).max(128).optional(),
+    tyreSetId: z.string().min(1).max(128).optional(),
+    campaignType: z.enum([
+      "seasonal_check",
+      "annual_service",
+      "tyre_swap",
+      "tyre_replacement",
+      "custom",
+    ]),
+    customMessage: z.string().trim().max(400).optional(),
+    plateNumber: z.string().trim().max(24).optional(),
+    vehicleLabel: z.string().trim().max(120).optional(),
+  })
+  .refine((v) => Boolean(v.customerId || v.tyreSetId), {
+    message: "TARGET_REQUIRED",
+  });
 
 /**
  * POST /api/garage/pro-tools/winback
@@ -50,23 +67,56 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const { customerId, campaignType, customMessage, plateNumber, vehicleLabel } =
-    parsed.data;
+  const {
+    customerId,
+    tyreSetId,
+    campaignType,
+    customMessage,
+    plateNumber,
+    vehicleLabel,
+  } = parsed.data;
 
-  const custSnap = await admin.adminDb
-    .collection("customers")
-    .doc(customerId)
-    .get();
-  if (!custSnap.exists) {
-    return NextResponse.json({ error: "CUSTOMER_NOT_FOUND" }, { status: 404 });
+  let customer: Customer | null = null;
+  let tyreSet: TyreSet | null = null;
+
+  if (tyreSetId) {
+    const tyreSnap = await admin.adminDb
+      .collection("tyreSets")
+      .doc(tyreSetId)
+      .get();
+    if (!tyreSnap.exists) {
+      return NextResponse.json({ error: "TYRE_SET_NOT_FOUND" }, { status: 404 });
+    }
+    tyreSet = { ...(tyreSnap.data() as TyreSet), id: tyreSnap.id };
+    if (tyreSet.garageId !== auth.garage.id) {
+      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    }
   }
-  const customer = { ...(custSnap.data() as Customer), id: custSnap.id };
-  if (customer.garageId !== auth.garage.id) {
-    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+
+  const effectiveCustomerId = customerId ?? tyreSet?.customerId ?? undefined;
+  if (effectiveCustomerId) {
+    const custSnap = await admin.adminDb
+      .collection("customers")
+      .doc(effectiveCustomerId)
+      .get();
+    if (custSnap.exists) {
+      const foundCust = { ...(custSnap.data() as Customer), id: custSnap.id };
+      if (foundCust.garageId !== auth.garage.id) {
+        return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      }
+      customer = foundCust;
+    } else if (customerId) {
+      return NextResponse.json({ error: "CUSTOMER_NOT_FOUND" }, { status: 404 });
+    }
+  }
+
+  const recipientName = customer?.fullName ?? tyreSet?.customerName ?? "";
+  if (!recipientName) {
+    return NextResponse.json({ error: "CUSTOMER_NOT_FOUND" }, { status: 404 });
   }
 
   let ownerProfile: UserProfile | null = null;
-  if (customer.linkedOwnerId) {
+  if (customer?.linkedOwnerId) {
     const ownerSnap = await admin.adminDb
       .collection("users")
       .doc(customer.linkedOwnerId)
@@ -78,10 +128,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const locale: AppLocale =
     ownerProfile?.language ?? auth.profile.language ?? "bg";
-  const toEmail = customer.email || ownerProfile?.email || null;
-  const toPhone = customer.phone || ownerProfile?.phone || null;
-  const plate = plateNumber || customer.plateNumbers[0] || "";
-  const vehicleText = vehicleLabel || plate || (locale === "bg" ? "вашия автомобил" : "your vehicle");
+  const toEmail = customer?.email || ownerProfile?.email || null;
+  const toPhone = customer?.phone || tyreSet?.customerPhone || ownerProfile?.phone || null;
+  const plate =
+    plateNumber || tyreSet?.plateNumber || customer?.plateNumbers[0] || "";
+  const vehicleText =
+    vehicleLabel ||
+    tyreSet?.brandModel ||
+    plate ||
+    (locale === "bg" ? "вашия автомобил" : "your vehicle");
   const nowIso = new Date().toISOString();
 
   const templateCopy = (() => {
@@ -91,36 +146,47 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         body: customMessage,
       };
     }
+    if (campaignType === "tyre_replacement") {
+      return locale === "bg"
+        ? {
+            subject: `${auth.garage.name} — Препоръка за нови гуми (${plate || vehicleText})`,
+            body: `Здравейте, ${recipientName}! При съхранение на гумите ви (${tyreSet?.sizeSpec ?? vehicleText}) отчетохме нисък грайфер (${tyreSet?.treadDepthMm ?? "≤3.5"} мм). Изпратете запитване за преференциална оферта за нов комплект в ${auth.garage.name}.`,
+          }
+        : {
+            subject: `${auth.garage.name} — Tread Depth Advisory & Tyre Offer (${plate || vehicleText})`,
+            body: `Hi ${recipientName}, your stored tyres (${tyreSet?.sizeSpec ?? vehicleText}) measured low tread depth (${tyreSet?.treadDepthMm ?? "≤3.5"} mm). Reply or book with ${auth.garage.name} for a seasonal replacement quote.`,
+          };
+    }
     if (campaignType === "tyre_swap") {
       return locale === "bg"
         ? {
             subject: `${auth.garage.name} — Сезонна смяна на гуми (${plate || vehicleText})`,
-            body: `Здравейте, ${customer.fullName}! Време е за сезонна смяна и баланс на гумите за ${vehicleText}. Запазете удобен час в ${auth.garage.name}.`,
+            body: `Здравейте, ${recipientName}! Време е за сезонна смяна и баланс на гумите за ${vehicleText}. Запазете удобен час в ${auth.garage.name}.`,
           }
         : {
             subject: `${auth.garage.name} — Seasonal Tyre Changeover (${plate || vehicleText})`,
-            body: `Hi ${customer.fullName}, it is time for seasonal tyre mounting & balancing for ${vehicleText}. Book your bay directly with ${auth.garage.name}.`,
+            body: `Hi ${recipientName}, it is time for seasonal tyre mounting & balancing for ${vehicleText}. Book your bay directly with ${auth.garage.name}.`,
           };
     }
     if (campaignType === "annual_service") {
       return locale === "bg"
         ? {
             subject: `${auth.garage.name} — Годишно обслужване и масла`,
-            body: `Здравейте, ${customer.fullName}! Измина време от последното посещение за ${vehicleText}. Очакваме ви в ${auth.garage.name} за смяна на масло, филтри и оглед.`,
+            body: `Здравейте, ${recipientName}! Измина време от последното посещение за ${vehicleText}. Очакваме ви в ${auth.garage.name} за смяна на масло, филтри и оглед.`,
           }
         : {
             subject: `${auth.garage.name} — Annual Oil & Filter Checkup`,
-            body: `Hi ${customer.fullName}, it has been a while since ${vehicleText} visited ${auth.garage.name}. Schedule your annual oil, filter, and safety checkup today.`,
+            body: `Hi ${recipientName}, it has been a while since ${vehicleText} visited ${auth.garage.name}. Schedule your annual oil, filter, and safety checkup today.`,
           };
     }
     return locale === "bg"
       ? {
           subject: `${auth.garage.name} — Безплатна сезонна диагностика`,
-          body: `Здравейте, ${customer.fullName}! Като ценен клиент на ${auth.garage.name}, каним ви на преференциален сезонен преглед за ${vehicleText}.`,
+          body: `Здравейте, ${recipientName}! Като ценен клиент на ${auth.garage.name}, каним ви на преференциален сезонен преглед за ${vehicleText}.`,
         }
       : {
           subject: `${auth.garage.name} — Seasonal Inspection Invitation`,
-          body: `Hi ${customer.fullName}, as a valued client of ${auth.garage.name}, we invite ${vehicleText} for a seasonal multipoint inspection & A/C check.`,
+          body: `Hi ${recipientName}, as a valued client of ${auth.garage.name}, we invite ${vehicleText} for a seasonal multipoint inspection & A/C check.`,
         };
   })();
 
@@ -128,19 +194,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const bookingUrl = `${appUrl}/garages/${auth.garage.slug}`;
 
   const remRef = admin.adminDb.collection("reminders").doc();
-  const channels: Array<"email" | "sms"> = ["email"];
+  const channels: Array<"email" | "sms"> = [];
+  if (toEmail) channels.push("email");
   if (toPhone) channels.push("sms");
+  if (channels.length === 0) channels.push("email");
 
   const remDoc: Omit<Reminder, "id"> = {
-    ownerId: customer.linkedOwnerId ?? null,
+    ownerId: customer?.linkedOwnerId ?? null,
     garageId: auth.garage.id,
     vehicleId: null,
     workOrderId: null,
     recipientEmail: toEmail,
     recipientPhone: toPhone,
-    recipientName: customer.fullName,
+    recipientName,
     plateNumber: plate,
-    type: campaignType === "tyre_swap" ? "seasonal_tyres" : "custom_service",
+    type:
+      campaignType === "tyre_swap" || campaignType === "tyre_replacement"
+        ? "seasonal_tyres"
+        : "custom_service",
     title: templateCopy.subject,
     notes: templateCopy.body,
     dueDate: nowIso.slice(0, 10),
@@ -155,18 +226,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   };
   await remRef.set(remDoc);
 
+  const deliveryTargetId = customer?.id ?? tyreSet?.id ?? remRef.id;
   const dispatchResult = await dispatchMultiChannelNotification({
-    ownerId: customer.linkedOwnerId ?? null,
+    ownerId: customer?.linkedOwnerId ?? null,
     garageId: auth.garage.id,
     reminderId: remRef.id,
-    deliveryKey: `pro-winback:${customer.id}:${nowIso.slice(0, 10)}:${campaignType}`,
+    deliveryKey: `pro-winback:${deliveryTargetId}:${nowIso.slice(0, 10)}:${campaignType}`,
     channels,
-    createInAppRecord: Boolean(customer.linkedOwnerId),
+    createInAppRecord: Boolean(customer?.linkedOwnerId),
     consumeGarageQuota: true,
     payload: {
       toEmail,
       toPhone,
-      recipientName: customer.fullName,
+      recipientName,
       locale,
       subject: templateCopy.subject,
       textBody: `${templateCopy.body}\n\n${bookingUrl}`,

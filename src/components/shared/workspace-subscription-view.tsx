@@ -2,13 +2,24 @@
 
 import {
   ArrowLeft,
+  ArrowRight,
+  Calculator,
+  CalendarDays,
   Check,
   CheckCircle2,
+  Coins,
   CreditCard,
   Crown,
+  FileSpreadsheet,
+  Fuel,
   Gauge,
   Info,
+  Lock,
+  PackagePlus,
+  ShieldCheck,
   Sparkles,
+  Users,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -131,6 +142,88 @@ export function WorkspaceSubscriptionView({
           t("garageProFeature2"),
           t("garageProFeature3"),
           t("garageProFeature4"),
+        ];
+
+  const baseProToolsPath =
+    target === "user" ? "/app/pro-tools" : "/garage/pro-tools";
+
+  const availableProTools =
+    target === "user"
+      ? [
+          {
+            tab: "tco",
+            icon: Calculator,
+            title: t("toolDriverTcoTitle"),
+            description: t("toolDriverTcoDesc"),
+          },
+          {
+            tab: "fuel",
+            icon: Fuel,
+            title: t("toolDriverFuelTitle"),
+            description: t("toolDriverFuelDesc"),
+          },
+          {
+            tab: "forecaster",
+            icon: Wrench,
+            title: t("toolDriverForecastTitle"),
+            description: t("toolDriverForecastDesc"),
+          },
+          {
+            tab: "budget",
+            icon: CalendarDays,
+            title: t("toolDriverBudgetTitle"),
+            description: t("toolDriverBudgetDesc"),
+          },
+          {
+            tab: "resale",
+            icon: ShieldCheck,
+            title: t("toolDriverResaleTitle"),
+            description: t("toolDriverResaleDesc"),
+          },
+          {
+            tab: "export",
+            icon: FileSpreadsheet,
+            title: t("toolDriverExportTitle"),
+            description: t("toolDriverExportDesc"),
+          },
+        ]
+      : [
+          {
+            tab: "profit",
+            icon: Coins,
+            title: t("toolGarageProfitTitle"),
+            description: t("toolGarageProfitDesc"),
+          },
+          {
+            tab: "bays",
+            icon: Gauge,
+            title: t("toolGarageBaysTitle"),
+            description: t("toolGarageBaysDesc"),
+          },
+          {
+            tab: "reorder",
+            icon: PackagePlus,
+            title: t("toolGarageReorderTitle"),
+            description: t("toolGarageReorderDesc"),
+          },
+          {
+            tab: "tyres",
+            icon: Wrench,
+            title: t("toolGarageTyresTitle"),
+            description: t("toolGarageTyresDesc"),
+          },
+          {
+            tab: "winback",
+            icon: Users,
+            title: t("toolGarageWinbackTitle"),
+            description: t("toolGarageWinbackDesc"),
+          },
+          {
+            tab: "exports",
+            icon: FileSpreadsheet,
+            title: t("toolGarageExportsTitle"),
+            description: t("toolGarageExportsDesc"),
+          },
         ];
 
   return (
@@ -306,6 +399,93 @@ export function WorkspaceSubscriptionView({
             settings={settings}
             onPlanChanged={(next) => setPlan(next)}
           />
+        </div>
+      </div>
+
+      {/* Included Paid Tools Directory */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-amber-400" aria-hidden="true" />
+              {t("toolsDirectoryHeading")}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {target === "user"
+                ? t("toolsDirectoryDriverSubtitle")
+                : t("toolsDirectoryGarageSubtitle")}
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href={baseProToolsPath}>
+              {isPro ? t("toolOpenSuiteBtn") : t("toolPreviewSuiteBtn")}
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {availableProTools.map((tool) => {
+            const Icon = tool.icon;
+            return (
+              <Card
+                key={tool.tab}
+                className={`flex flex-col justify-between p-4 transition-colors ${
+                  isPro
+                    ? "border-primary/30 bg-card/80"
+                    : "border-border/70 bg-card/50"
+                }`}
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <Badge
+                      variant={isPro ? "success" : "secondary"}
+                      className="gap-1 text-[11px]"
+                    >
+                      {isPro ? (
+                        <>
+                          <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                          {t("toolUnlockedBadge")}
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="h-3 w-3" aria-hidden="true" />
+                          {t("toolProBadge")}
+                        </>
+                      )}
+                    </Badge>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {tool.title}
+                    </h3>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      {tool.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-border/50">
+                  <Button
+                    asChild
+                    size="sm"
+                    variant={isPro ? "secondary" : "ghost"}
+                    className="w-full justify-between text-xs"
+                  >
+                    <Link href={`${baseProToolsPath}?tab=${tool.tab}`}>
+                      <span>
+                        {isPro ? t("toolOpenBtn") : t("toolPreviewBtn")}
+                      </span>
+                      <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       </div>
 

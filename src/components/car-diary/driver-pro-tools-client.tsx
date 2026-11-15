@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  AlertTriangle,
   BellPlus,
   Calculator,
+  CalendarDays,
   Car,
   Check,
   CheckCircle2,
@@ -46,7 +48,11 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { BulgariaFuelItem } from "@/lib/fuel-prices";
-import { computeDriverPortfolioSummaries } from "@/lib/subscriptions/pro-metrics";
+import {
+  computeDriverBudgetForecast,
+  computeDriverPortfolioSummaries,
+  type MissingComplianceGap,
+} from "@/lib/subscriptions/pro-metrics";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import type {
   AppLocale,
@@ -68,7 +74,18 @@ interface DriverProToolsClientProps {
   initialReminders: Reminder[];
   fuelPrices: BulgariaFuelItem[];
   settings: PlatformSettingsConfig;
+  initialTab?: string;
 }
+
+const VALID_DRIVER_PRO_TABS = [
+  "tco",
+  "fuel",
+  "forecaster",
+  "budget",
+  "resale",
+  "export",
+] as const;
+type DriverProTab = (typeof VALID_DRIVER_PRO_TABS)[number];
 
 interface ForecastIntervalTemplate {
   key: string;
@@ -138,10 +155,17 @@ export function DriverProToolsClient({
   initialReminders,
   fuelPrices,
   settings,
+  initialTab,
 }: DriverProToolsClientProps) {
   const t = useTranslations("driverProTools");
   const tCat = useTranslations("carDiary.categories");
   const locale = useLocale() as AppLocale;
+
+  const resolvedInitialTab: DriverProTab = VALID_DRIVER_PRO_TABS.includes(
+    initialTab as DriverProTab
+  )
+    ? (initialTab as DriverProTab)
+    : "tco";
 
   const [entries, setEntries] = useState<DiaryEntry[]>(initialEntries);
   const [reminders, setReminders] = useState<Reminder[]>(initialReminders);
@@ -180,6 +204,30 @@ export function DriverProToolsClient({
   );
   const [copiedVehicleId, setCopiedVehicleId] = useState<string | null>(null);
   const [exportVehicleId, setExportVehicleId] = useState<string>("all");
+
+  // Fuel Economy & LPG/Hybrid Payback state
+  const [fuelAnnualKm, setFuelAnnualKm] = useState<number>(15000);
+  const [fuelCurrentConsumption, setFuelCurrentConsumption] =
+    useState<number>(7.8);
+  const [fuelTargetType, setFuelTargetType] = useState<
+    "lpg" | "diesel" | "electric" | "hybrid"
+  >("lpg");
+  const [fuelTargetConsumption, setFuelTargetConsumption] =
+    useState<number>(9.2);
+  const [fuelUpgradeCostEur, setFuelUpgradeCostEur] = useState<number>(850);
+  const [quickFuelVehicleId, setQuickFuelVehicleId] = useState<string>(
+    firstVehicle?.id ?? ""
+  );
+  const [quickFuelCostEur, setQuickFuelCostEur] = useState<number>(50);
+  const [savingQuickFuel, setSavingQuickFuel] = useState(false);
+
+  // 12-Month Budget & Compliance state
+  const [creatingComplianceKey, setCreatingComplianceKey] = useState<
+    string | null
+  >(null);
+  const [createdComplianceKeys, setCreatedComplianceKeys] = useState<
+    Record<string, boolean>
+  >({});
 
   const portfolioSummaries = useMemo(
     () =>
@@ -279,6 +327,43 @@ export function DriverProToolsClient({
     });
   }, [createdForecastKeys, entries, forecastSummary, monthlyKm, reminders, t]);
 
+  const budgetForecast = useMemo(
+    () => computeDriverBudgetForecast(vehicles, documents, reminders),
+    [vehicles, documents, reminders]
+  );
+
+  const fuelAnalytics = useMemo(
+    () =>
+      portfolioSummaries.map((summary) => {
+        const fuelEntries = entries.filter(
+          (e) => e.vehicleId === summary.vehicle.id && e.category === "fuel"
+        );
+        const totalFuelSpendEur = fuelEntries.reduce(
+          (acc, e) =>
+            acc + (e.currency === "BGN" ? e.costAmount / BGN_PER_EUR : e.costAmount),
+          0
+        );
+        const avgPerRefuelEur =
+          fuelEntries.length > 0 ? totalFuelSpendEur / fuelEntries.length : 0;
+        const costPer100KmEur =
+          summary.trackedKm > 200
+            ? (totalFuelSpendEur / summary.trackedKm) * 100
+            : null;
+        return {
+          vehicle: summary.vehicle,
+          refuelsCount: fuelEntries.length,
+          totalFuelSpendEur,
+          avgPerRefuelEur,
+          costPer100KmEur,
+          fuelSharePct:
+            summary.totalSpendEur > 0
+              ? Math.round((totalFuelSpendEur / summary.totalSpendEur) * 100)
+              : 0,
+        };
+      }),
+    [entries, portfolioSummaries]
+  );
+
   if (!isPro) {
     return (
       <ProFeatureGate
@@ -290,6 +375,8 @@ export function DriverProToolsClient({
           t("gateFeature2"),
           t("gateFeature3"),
           t("gateFeature4"),
+          t("gateFeature5"),
+          t("gateFeature6"),
         ]}
         upgradeHref="/app/subscription"
         monthlyPriceEur={settings.userProPlanPriceEur}
@@ -302,6 +389,110 @@ export function DriverProToolsClient({
       />
     );
   }
+
+  const byFuelCode = new Map(fuelPrices.map((f) => [f.code, f.priceEur]));
+  const baselinePetrolEur = byFuelCode.get("gasoline") ?? 1.28;
+  const targetFuelUnitPriceEur =
+    fuelTargetType === "lpg"
+      ? (byFuelCode.get("lpg") ?? 0.64)
+      : fuelTargetType === "diesel"
+        ? (byFuelCode.get("diesel") ?? 1.29)
+        : fuelTargetType === "electric"
+          ? 0.16
+          : baselinePetrolEur;
+
+  const safeFuelAnnualKm = Math.max(0, fuelAnnualKm);
+  const annualBaselineFuelEur =
+    (safeFuelAnnualKm / 100) * Math.max(0, fuelCurrentConsumption) * baselinePetrolEur;
+  const annualTargetFuelEur =
+    (safeFuelAnnualKm / 100) * Math.max(0, fuelTargetConsumption) * targetFuelUnitPriceEur;
+  const annualFuelSavingsEur = annualBaselineFuelEur - annualTargetFuelEur;
+  const monthlyFuelSavingsEur = annualFuelSavingsEur / 12;
+  const fuelPaybackMonths =
+    annualFuelSavingsEur > 0 && fuelUpgradeCostEur > 0
+      ? Math.ceil((fuelUpgradeCostEur / annualFuelSavingsEur) * 12)
+      : annualFuelSavingsEur > 0
+        ? 0
+        : null;
+  const threeYearNetFuelSavingsEur =
+    annualFuelSavingsEur * 3 - Math.max(0, fuelUpgradeCostEur);
+
+  const handleSaveQuickFuel = async () => {
+    const targetVehicle =
+      vehicles.find((v) => v.id === quickFuelVehicleId) ?? firstVehicle;
+    if (!targetVehicle || quickFuelCostEur <= 0) {
+      toast.error(t("tripValidationError"));
+      return;
+    }
+
+    setSavingQuickFuel(true);
+    try {
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const res = await fetch("/api/diary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vehicleId: targetVehicle.id,
+          category: "fuel" as const,
+          title: t("quickFuelEntryTitle", { plate: targetVehicle.plateNumber }),
+          date: todayIso,
+          mileageKm: targetVehicle.currentMileageKm,
+          costAmount: Number(quickFuelCostEur.toFixed(2)),
+          currency: "EUR" as const,
+          notes: t("quickFuelNotes"),
+        }),
+      });
+      if (!res.ok) {
+        toast.error(t("tripSaveError"));
+        return;
+      }
+      const data = (await res.json()) as { entry?: DiaryEntry };
+      if (data.entry) {
+        setEntries((prev) => [data.entry as DiaryEntry, ...prev]);
+      }
+      toast.success(t("quickFuelSavedToast"));
+    } finally {
+      setSavingQuickFuel(false);
+    }
+  };
+
+  const handleScheduleMissingCompliance = async (gap: MissingComplianceGap) => {
+    const stateKey = `${gap.vehicleId}:${gap.kind}`;
+    setCreatingComplianceKey(stateKey);
+    try {
+      const title =
+        gap.kind === "technical_inspection"
+          ? t("complianceKindInspection")
+          : gap.kind === "vignette"
+            ? t("complianceKindVignette")
+            : t("complianceKindLiability");
+      const res = await fetch("/api/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vehicleId: gap.vehicleId,
+          type: gap.kind,
+          title: `${title} — ${gap.plateNumber}`,
+          dueDate: addDaysIso(30),
+          dueMileageKm: null,
+          notes: t("complianceReminderNote"),
+          channels: ["email"],
+        }),
+      });
+      if (!res.ok) {
+        toast.error(t("forecastCreateError"));
+        return;
+      }
+      const data = (await res.json()) as { reminder?: Reminder };
+      if (data.reminder) {
+        setReminders((prev) => [data.reminder as Reminder, ...prev]);
+      }
+      setCreatedComplianceKeys((prev) => ({ ...prev, [stateKey]: true }));
+      toast.success(t("complianceReminderToast"));
+    } finally {
+      setCreatingComplianceKey(null);
+    }
+  };
 
   const simVehicle = vehicles.find((v) => v.id === simVehicleId) ?? firstVehicle;
   const fuelNeeded = Math.max(0, (distanceKm / 100) * consumptionPer100);
@@ -515,15 +706,23 @@ export function DriverProToolsClient({
           }
         />
       ) : (
-        <Tabs defaultValue="tco" className="space-y-4">
+        <Tabs defaultValue={resolvedInitialTab} className="space-y-4">
           <TabsList className="flex h-auto flex-wrap justify-start gap-1">
             <TabsTrigger value="tco" className="gap-1.5">
               <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
               {t("tabTco")}
             </TabsTrigger>
+            <TabsTrigger value="fuel" className="gap-1.5">
+              <Fuel className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("tabFuel")}
+            </TabsTrigger>
             <TabsTrigger value="forecaster" className="gap-1.5">
               <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
               {t("tabForecaster")}
+            </TabsTrigger>
+            <TabsTrigger value="budget" className="gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+              {t("tabBudget")}
             </TabsTrigger>
             <TabsTrigger value="resale" className="gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1039,6 +1238,404 @@ export function DriverProToolsClient({
                   <Download className="h-4 w-4" aria-hidden="true" />
                   {t("downloadPortfolioCsvBtn")}
                 </Button>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* TAB: Fuel Economy & LPG/Hybrid Payback */}
+          <TabsContent value="fuel" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Fuel className="h-4 w-4 text-primary" aria-hidden="true" />
+                      {t("fuelLiveTitle")}
+                    </CardTitle>
+                    <CardDescription>{t("fuelLiveDesc")}</CardDescription>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {fuelPrices.slice(0, 4).map((fp) => (
+                      <Badge
+                        key={fp.code}
+                        variant="secondary"
+                        className="font-mono text-xs"
+                      >
+                        {fp.code.toUpperCase()}: €{fp.priceEur.toFixed(2)}/L
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {fuelAnalytics.map((row) => (
+                    <div
+                      key={row.vehicle.id}
+                      className="rounded-xl border border-border/60 bg-background/40 p-4 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {row.vehicle.make} {row.vehicle.model}
+                          </p>
+                          <p className="text-xs font-mono text-muted-foreground">
+                            {row.vehicle.plateNumber}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {row.refuelsCount} {t("fuelRefuelsLabel")}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                        <div>
+                          <p className="text-muted-foreground">{t("fuelTotalSpend")}</p>
+                          <p className="font-mono font-semibold text-foreground">
+                            {formatCurrency(row.totalFuelSpendEur, locale, "EUR")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">{t("fuelAvgRefuel")}</p>
+                          <p className="font-mono font-semibold text-foreground">
+                            {formatCurrency(row.avgPerRefuelEur, locale, "EUR")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">{t("fuelPer100Km")}</p>
+                          <p className="font-mono font-semibold text-primary">
+                            {row.costPer100KmEur !== null
+                              ? `${formatCurrency(row.costPer100KmEur, locale, "EUR")}`
+                              : "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Quick Fuel Log */}
+                <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-background/50 p-3.5">
+                  <div className="min-w-[180px] flex-1 space-y-1">
+                    <Label className="text-xs">{t("quickFuelVehicleLabel")}</Label>
+                    <Select
+                      value={quickFuelVehicleId}
+                      onValueChange={setQuickFuelVehicleId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {vehicles.map((v) => (
+                          <SelectItem key={v.id} value={v.id}>
+                            {v.make} {v.model} ({v.plateNumber})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-36 space-y-1">
+                    <Label className="text-xs">{t("quickFuelCostLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      step="1"
+                      value={quickFuelCostEur}
+                      onChange={(e) =>
+                        setQuickFuelCostEur(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={savingQuickFuel}
+                    onClick={handleSaveQuickFuel}
+                  >
+                    <Fuel className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    {t("quickFuelSaveBtn")}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* LPG / Hybrid Payback Calculator */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <TrendingUp className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+                  {t("fuelPaybackTitle")}
+                </CardTitle>
+                <CardDescription>{t("fuelPaybackDesc")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="space-y-1.5">
+                    <Label>{t("fuelAnnualKmLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={1000}
+                      step={1000}
+                      value={fuelAnnualKm}
+                      onChange={(e) =>
+                        setFuelAnnualKm(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("fuelCurrentConsLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      step="0.2"
+                      value={fuelCurrentConsumption}
+                      onChange={(e) =>
+                        setFuelCurrentConsumption(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("fuelTargetTypeLabel")}</Label>
+                    <Select
+                      value={fuelTargetType}
+                      onValueChange={(val) =>
+                        setFuelTargetType(
+                          val as "lpg" | "diesel" | "electric" | "hybrid"
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="lpg">{t("fuelTargetLpg")}</SelectItem>
+                        <SelectItem value="hybrid">{t("fuelTargetHybrid")}</SelectItem>
+                        <SelectItem value="diesel">{t("fuelTargetDiesel")}</SelectItem>
+                        <SelectItem value="electric">{t("fuelTargetElectric")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("fuelTargetConsLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      step="0.2"
+                      value={fuelTargetConsumption}
+                      onChange={(e) =>
+                        setFuelTargetConsumption(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{t("fuelUpgradeCostLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={50}
+                      value={fuelUpgradeCostEur}
+                      onChange={(e) =>
+                        setFuelUpgradeCostEur(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 rounded-xl border border-border/60 bg-background/50 p-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("fuelAnnualSavingsLabel")}</p>
+                    <p
+                      className={`font-mono text-xl font-bold ${
+                        annualFuelSavingsEur >= 0
+                          ? "text-emerald-400"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {formatCurrency(annualFuelSavingsEur, locale, "EUR")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("fuelMonthlySavingsLabel")}</p>
+                    <p className="font-mono text-xl font-bold text-foreground">
+                      {formatCurrency(monthlyFuelSavingsEur, locale, "EUR")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("fuelPaybackMonthsLabel")}</p>
+                    <p className="font-mono text-xl font-bold text-primary">
+                      {fuelPaybackMonths !== null
+                        ? `${fuelPaybackMonths} ${t("monthsShort")}`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("fuelThreeYearNetLabel")}</p>
+                    <p className="font-mono text-xl font-bold text-emerald-400">
+                      {formatCurrency(threeYearNetFuelSavingsEur, locale, "EUR")}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* TAB: 12-Month Ownership Budget & Renewal Calendar */}
+          <TabsContent value="budget" className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground">{t("budgetTotalYearLabel")}</p>
+                <p className="mt-1 font-mono text-2xl font-bold text-foreground">
+                  {formatCurrency(
+                    budgetForecast.totalAnnualRenewalsEur,
+                    locale,
+                    "EUR"
+                  )}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground">{t("budgetMonthlyReserveLabel")}</p>
+                <p className="mt-1 font-mono text-2xl font-bold text-primary">
+                  {formatCurrency(
+                    budgetForecast.recommendedMonthlyReserveEur,
+                    locale,
+                    "EUR"
+                  )}
+                </p>
+              </Card>
+              <Card className="p-4">
+                <p className="text-xs text-muted-foreground">{t("budgetMissingGapsLabel")}</p>
+                <p
+                  className={`mt-1 font-mono text-2xl font-bold ${
+                    budgetForecast.missingCompliance.length > 0
+                      ? "text-amber-400"
+                      : "text-emerald-400"
+                  }`}
+                >
+                  {budgetForecast.missingCompliance.length}
+                </p>
+              </Card>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-5">
+              {/* Compliance Gaps */}
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <AlertTriangle className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                    {t("budgetComplianceTitle")}
+                  </CardTitle>
+                  <CardDescription>{t("budgetComplianceDesc")}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {budgetForecast.missingCompliance.length === 0 ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>{t("budgetComplianceAllGood")}</span>
+                    </div>
+                  ) : (
+                    budgetForecast.missingCompliance.map((gap) => {
+                      const stateKey = `${gap.vehicleId}:${gap.kind}`;
+                      const created = Boolean(createdComplianceKeys[stateKey]);
+                      const busy = creatingComplianceKey === stateKey;
+                      const kindLabel =
+                        gap.kind === "technical_inspection"
+                          ? t("complianceKindInspection")
+                          : gap.kind === "vignette"
+                            ? t("complianceKindVignette")
+                            : t("complianceKindLiability");
+                      return (
+                        <div
+                          key={stateKey}
+                          className="rounded-lg border border-border/60 bg-background/40 p-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {gap.vehicleLabel}
+                              </p>
+                              <p className="text-xs font-mono text-muted-foreground">
+                                {gap.plateNumber}
+                              </p>
+                            </div>
+                            <Badge variant="warning" className="text-xs">
+                              {kindLabel}
+                            </Badge>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={created ? "outline" : "secondary"}
+                            className="w-full"
+                            disabled={busy || created}
+                            onClick={() => handleScheduleMissingCompliance(gap)}
+                          >
+                            {created ? (
+                              <>
+                                <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-400" />
+                                {t("forecastCreatedBadge")}
+                              </>
+                            ) : (
+                              <>
+                                <BellPlus className="mr-1.5 h-3.5 w-3.5" />
+                                {t("budgetScheduleGapBtn")}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 12-Month Calendar */}
+              <Card className="lg:col-span-3">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CalendarDays className="h-4 w-4 text-primary" aria-hidden="true" />
+                    {t("budgetCalendarTitle")}
+                  </CardTitle>
+                  <CardDescription>{t("budgetCalendarDesc")}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    {budgetForecast.months.map((m) => (
+                      <div
+                        key={m.monthKey}
+                        className={`rounded-lg border p-3 ${
+                          m.eventsCount > 0
+                            ? "border-primary/40 bg-primary/5"
+                            : "border-border/50 bg-background/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            {m.monthKey}
+                          </span>
+                          <span className="font-mono text-sm font-bold text-primary">
+                            {formatCurrency(m.estimatedEur, locale, "EUR")}
+                          </span>
+                        </div>
+                        {m.eventsCount > 0 ? (
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {m.labels.map((lbl, idx) => (
+                              <Badge
+                                key={`${m.monthKey}-${idx}`}
+                                variant="secondary"
+                                className="max-w-full truncate text-[11px]"
+                              >
+                                {lbl}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t("budgetNoEventsMonth")}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
               </Card>
             </div>
           </TabsContent>

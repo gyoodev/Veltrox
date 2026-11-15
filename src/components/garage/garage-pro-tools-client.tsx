@@ -4,11 +4,13 @@ import {
   AlertTriangle,
   Calculator,
   CheckCircle2,
+  Clock,
   Coins,
   Crown,
   Download,
   ExternalLink,
   FileSpreadsheet,
+  Gauge,
   PackageCheck,
   PackagePlus,
   Search,
@@ -16,6 +18,7 @@ import {
   Sparkles,
   TrendingUp,
   Users,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
@@ -45,17 +48,23 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  computeGarageBayCapacityAndTurnaround,
   computeGarageCustomerSegments,
   computeGarageProfitAnalysis,
   computeGarageReorderList,
+  computeGarageTyreHotelOpportunities,
+  type GarageTyreOpportunityRow,
 } from "@/lib/subscriptions/pro-metrics";
 import { formatCurrency } from "@/lib/utils";
 import type {
   AppLocale,
+  Appointment,
   Customer,
   Garage,
+  GarageStaff,
   InventoryPart,
   PlatformSettingsConfig,
+  TyreSet,
   WorkOrder,
   WorkOrderItem,
 } from "@/types/domain";
@@ -67,13 +76,27 @@ interface GarageProToolsClientProps {
   workOrderItems: WorkOrderItem[];
   initialParts: InventoryPart[];
   customers: Customer[];
+  appointments: Appointment[];
+  tyreSets: TyreSet[];
+  staff: GarageStaff[];
   initialQuota: {
     used: number;
     quota: number;
     remaining: number;
   };
   settings: PlatformSettingsConfig;
+  initialTab?: string;
 }
+
+const VALID_GARAGE_PRO_TABS = [
+  "profit",
+  "bays",
+  "reorder",
+  "tyres",
+  "winback",
+  "exports",
+] as const;
+type GarageProTab = (typeof VALID_GARAGE_PRO_TABS)[number];
 
 export function GarageProToolsClient({
   garage,
@@ -82,11 +105,21 @@ export function GarageProToolsClient({
   workOrderItems,
   initialParts,
   customers,
+  appointments,
+  tyreSets,
+  staff,
   initialQuota,
   settings,
+  initialTab,
 }: GarageProToolsClientProps) {
   const t = useTranslations("garageProTools");
   const locale = useLocale() as AppLocale;
+
+  const resolvedInitialTab: GarageProTab = VALID_GARAGE_PRO_TABS.includes(
+    initialTab as GarageProTab
+  )
+    ? (initialTab as GarageProTab)
+    : "profit";
 
   const [parts, setParts] = useState<InventoryPart[]>(initialParts);
   const [quota, setQuota] = useState(initialQuota);
@@ -117,6 +150,19 @@ export function GarageProToolsClient({
   const [sentCustomerIds, setSentCustomerIds] = useState<
     Record<string, boolean>
   >({});
+
+  // Bay Capacity & Turnaround simulator state
+  const [simHoursPerDay, setSimHoursPerDay] = useState<number>(8);
+  const [simWorkingDays, setSimWorkingDays] = useState<number>(22);
+  const [simTargetUtilPct, setSimTargetUtilPct] = useState<number>(75);
+  const [simBayHourlyRate, setSimBayHourlyRate] = useState<number>(45);
+
+  // Tyre Hotel Upsell & Changeover state
+  const [swapFeeEur, setSwapFeeEur] = useState<number>(40);
+  const [newSetUpsellProfitEur, setNewSetUpsellProfitEur] =
+    useState<number>(95);
+  const [sendingTyreId, setSendingTyreId] = useState<string | null>(null);
+  const [sentTyreIds, setSentTyreIds] = useState<Record<string, boolean>>({});
 
   const profitAnalysis = useMemo(
     () => computeGarageProfitAnalysis(workOrders, workOrderItems, parts),
@@ -164,6 +210,22 @@ export function GarageProToolsClient({
     });
   }, [customerQuery, customerSegments, segmentFilter]);
 
+  const bayCapacity = useMemo(
+    () =>
+      computeGarageBayCapacityAndTurnaround(
+        garage,
+        workOrders,
+        appointments,
+        staff
+      ),
+    [appointments, garage, staff, workOrders]
+  );
+
+  const tyreHotelSummary = useMemo(
+    () => computeGarageTyreHotelOpportunities(tyreSets),
+    [tyreSets]
+  );
+
   if (!isPro) {
     return (
       <ProFeatureGate
@@ -175,6 +237,8 @@ export function GarageProToolsClient({
           t("gateFeature2"),
           t("gateFeature3"),
           t("gateFeature4"),
+          t("gateFeature5"),
+          t("gateFeature6"),
         ]}
         upgradeHref="/garage/subscription"
         monthlyPriceEur={settings.proPlanPriceEur}
@@ -187,6 +251,67 @@ export function GarageProToolsClient({
       />
     );
   }
+
+  // Bay Capacity Revenue Simulation
+  const monthlyAvailableBayHours =
+    bayCapacity.concurrentBays *
+    Math.max(1, simHoursPerDay) *
+    Math.max(1, simWorkingDays);
+  const projectedBillableBayHours = Math.round(
+    monthlyAvailableBayHours *
+      (Math.min(100, Math.max(10, simTargetUtilPct)) / 100)
+  );
+  const projectedMonthlyBayRevenueEur =
+    projectedBillableBayHours * Math.max(0, simBayHourlyRate);
+
+  // Tyre Hotel Seasonal Pipeline Simulation
+  const swapPipelineEur =
+    tyreHotelSummary.storedSetsCount * Math.max(0, swapFeeEur);
+  const replacementUpsellEur =
+    tyreHotelSummary.lowTreadUpsellsCount * Math.max(0, newSetUpsellProfitEur);
+  const totalTyrePipelineEur = swapPipelineEur + replacementUpsellEur;
+
+  const handleSendTyreOutreach = async (
+    row: GarageTyreOpportunityRow,
+    outreachType: "tyre_swap" | "tyre_replacement"
+  ) => {
+    setSendingTyreId(row.tyreSet.id);
+    try {
+      const res = await fetch("/api/garage/pro-tools/winback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tyreSetId: row.tyreSet.id,
+          campaignType: outreachType,
+          plateNumber: row.tyreSet.plateNumber || undefined,
+          vehicleLabel:
+            row.tyreSet.brandModel || row.tyreSet.sizeSpec || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(
+          err.error === "QUOTA_EXCEEDED"
+            ? t("quotaExceededError")
+            : t("winbackError")
+        );
+        return;
+      }
+      setSentTyreIds((prev) => ({ ...prev, [row.tyreSet.id]: true }));
+      setQuota((q) => ({
+        ...q,
+        used: q.used + 1,
+        remaining: Math.max(0, q.remaining - 1),
+      }));
+      toast.success(
+        t("tyreOutreachSentToast", {
+          plate: row.tyreSet.plateNumber,
+        })
+      );
+    } finally {
+      setSendingTyreId(null);
+    }
+  };
 
   // Quote calculator computed metrics
   const partsSellNet =
@@ -365,15 +490,23 @@ export function GarageProToolsClient({
         </Card>
       </div>
 
-      <Tabs defaultValue="profit" className="space-y-4">
+      <Tabs defaultValue={resolvedInitialTab} className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start gap-1">
           <TabsTrigger value="profit" className="gap-1.5">
             <Coins className="h-3.5 w-3.5" aria-hidden="true" />
             {t("tabProfit")}
           </TabsTrigger>
+          <TabsTrigger value="bays" className="gap-1.5">
+            <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("tabBays")}
+          </TabsTrigger>
           <TabsTrigger value="reorder" className="gap-1.5">
             <PackagePlus className="h-3.5 w-3.5" aria-hidden="true" />
             {t("tabReorder")}
+          </TabsTrigger>
+          <TabsTrigger value="tyres" className="gap-1.5">
+            <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
+            {t("tabTyres")}
           </TabsTrigger>
           <TabsTrigger value="winback" className="gap-1.5">
             <Users className="h-3.5 w-3.5" aria-hidden="true" />
@@ -901,6 +1034,332 @@ export function GarageProToolsClient({
               </Button>
             </Card>
           ))}
+        </TabsContent>
+
+        {/* TAB: Bay Capacity & Turnaround Analyzer */}
+        <TabsContent value="bays" className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">{t("baysConcurrentLabel")}</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-foreground">
+                {bayCapacity.concurrentBays}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">{t("baysActiveStaffLabel")}</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-foreground">
+                {bayCapacity.activeStaffCount}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">{t("baysAvgTurnaroundLabel")}</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-primary">
+                {bayCapacity.avgTurnaroundHours !== null
+                  ? `${bayCapacity.avgTurnaroundHours} ${t("hoursShort")}`
+                  : "—"}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">{t("baysLiveLoadLabel")}</p>
+              <p
+                className={`mt-1 font-mono text-2xl font-bold ${
+                  bayCapacity.currentBayUtilizationPct >= 85
+                    ? "text-amber-400"
+                    : "text-emerald-400"
+                }`}
+              >
+                {bayCapacity.currentBayUtilizationPct}%
+              </p>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* 7-Day Appointment Load Forecast */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Clock className="h-4 w-4 text-primary" aria-hidden="true" />
+                  {t("baysScheduleTitle")}
+                </CardTitle>
+                <CardDescription>{t("baysScheduleDesc")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {bayCapacity.dailySchedule.map((day) => (
+                  <div key={day.dateIso} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-mono font-medium text-foreground">
+                        {day.dateIso}
+                      </span>
+                      <span className="font-mono text-muted-foreground">
+                        {day.bookedCount} / {day.capacitySlots} {t("baysSlotsUnit")} ({day.loadPct}%)
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={`h-full transition-all ${
+                          day.loadPct >= 85
+                            ? "bg-red-500"
+                            : day.loadPct >= 60
+                              ? "bg-amber-500"
+                              : "bg-primary"
+                        }`}
+                        style={{ width: `${day.loadPct}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Bay Revenue Potential Simulator */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <TrendingUp className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+                  {t("baysRevenueSimTitle")}
+                </CardTitle>
+                <CardDescription>{t("baysRevenueSimDesc")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t("baysHoursPerDayLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={simHoursPerDay}
+                      onChange={(e) =>
+                        setSimHoursPerDay(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t("baysWorkingDaysLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={simWorkingDays}
+                      onChange={(e) =>
+                        setSimWorkingDays(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t("baysTargetUtilLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={10}
+                      max={100}
+                      value={simTargetUtilPct}
+                      onChange={(e) =>
+                        setSimTargetUtilPct(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t("baysHourlyRateLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={simBayHourlyRate}
+                      onChange={(e) =>
+                        setSimBayHourlyRate(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3 rounded-xl border border-border/60 bg-background/50 p-3.5">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("baysAvailableHoursLabel")}</p>
+                    <p className="font-mono text-lg font-bold text-foreground">
+                      {monthlyAvailableBayHours} {t("hoursShort")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("baysBillableHoursLabel")}</p>
+                    <p className="font-mono text-lg font-bold text-primary">
+                      {projectedBillableBayHours} {t("hoursShort")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">{t("baysProjectedRevLabel")}</p>
+                    <p className="font-mono text-lg font-bold text-emerald-400">
+                      {formatCurrency(projectedMonthlyBayRevenueEur, locale, "EUR")}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* TAB: Tyre Hotel Upsell & Changeover Engine */}
+        <TabsContent value="tyres" className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">{t("tyresStoredSetsLabel")}</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-foreground">
+                {tyreHotelSummary.storedSetsCount}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground font-mono">
+                {tyreHotelSummary.totalTyresCount} {t("tyresUnitLabel")}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">{t("tyresLowTreadLabel")}</p>
+              <p
+                className={`mt-1 font-mono text-2xl font-bold ${
+                  tyreHotelSummary.lowTreadUpsellsCount > 0
+                    ? "text-amber-400"
+                    : "text-emerald-400"
+                }`}
+              >
+                {tyreHotelSummary.lowTreadUpsellsCount}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">{t("tyresSwapPipelineLabel")}</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-primary">
+                {formatCurrency(swapPipelineEur, locale, "EUR")}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs text-muted-foreground">{t("tyresTotalPipelineLabel")}</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-emerald-400">
+                {formatCurrency(totalTyrePipelineEur, locale, "EUR")}
+              </p>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Wrench className="h-4 w-4 text-primary" aria-hidden="true" />
+                    {t("tyresEngineTitle")}
+                  </CardTitle>
+                  <CardDescription>{t("tyresEngineDesc")}</CardDescription>
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="w-32 space-y-1">
+                    <Label className="text-xs">{t("tyresSwapFeeLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={5}
+                      value={swapFeeEur}
+                      onChange={(e) =>
+                        setSwapFeeEur(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                  <div className="w-36 space-y-1">
+                    <Label className="text-xs">{t("tyresUpsellMarginLabel")}</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={10}
+                      value={newSetUpsellProfitEur}
+                      onChange={(e) =>
+                        setNewSetUpsellProfitEur(Number(e.target.value) || 0)
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {tyreHotelSummary.opportunities.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-2">
+                  <p className="text-sm font-medium text-foreground">
+                    {t("tyresEmptyTitle")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("tyresEmptyDesc")}
+                  </p>
+                  <Button asChild variant="outline" size="sm" className="mt-2">
+                    <Link href="/garage/tyres">
+                      <ExternalLink className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                      {t("tyresOpenHotelBtn")}
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                tyreHotelSummary.opportunities.map((row) => {
+                  const sent = Boolean(sentTyreIds[row.tyreSet.id]);
+                  const sending = sendingTyreId === row.tyreSet.id;
+                  const campaignMode = row.isLowTread
+                    ? "tyre_replacement"
+                    : "tyre_swap";
+                  return (
+                    <div
+                      key={row.tyreSet.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-background/40 p-3.5"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            {row.tyreSet.plateNumber}
+                          </span>
+                          <span className="text-sm text-foreground">
+                            {row.tyreSet.customerName}
+                          </span>
+                          <Badge variant="outline" className="text-[11px] font-mono">
+                            {row.tyreSet.sizeSpec} ({row.tyreSet.season})
+                          </Badge>
+                          {row.isLowTread ? (
+                            <Badge variant="warning" className="text-[11px]">
+                              {t("tyresLowTreadBadge", {
+                                mm: row.tyreSet.treadDepthMm ?? 0,
+                              })}
+                            </Badge>
+                          ) : null}
+                          {row.isDueSoon ? (
+                            <Badge variant="secondary" className="text-[11px]">
+                              {t("tyresDueSoonBadge")}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t("tyresLocationMeta", {
+                            loc: row.tyreSet.shelfLocation,
+                            qty: row.tyreSet.quantity,
+                          })}
+                        </p>
+                      </div>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={sent ? "outline" : row.isLowTread ? "default" : "secondary"}
+                        disabled={sending || sent || quota.remaining <= 0}
+                        onClick={() => handleSendTyreOutreach(row, campaignMode)}
+                      >
+                        {sent ? (
+                          <>
+                            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-emerald-400" />
+                            {t("sentBadge")}
+                          </>
+                        ) : (
+                          <>
+                            <Send className="mr-1.5 h-3.5 w-3.5" />
+                            {row.isLowTread
+                              ? t("tyresSendReplacementBtn")
+                              : t("tyresSendSwapBtn")}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
