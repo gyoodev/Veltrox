@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "462306686994",
+    "project_id": "veltrox-gkdev",
+    "storage_bucket": "veltrox-gkdev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:462306686994:android:81d930c5d7a22a121500cb",
+        "android_client_info": {
+          "package_name": "app.veltrox.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "462306686994-a6s1k0ouif17v8jlji7kmgnbep4bmjvd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNvqqXyYYZWzI_zf9tmZEfTPg-qwb8I5g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "462306686994-a6s1k0ouif17v8jlji7kmgnbep4bmjvd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
